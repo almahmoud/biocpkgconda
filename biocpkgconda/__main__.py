@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import Error, config, index, metadata, recipe, record
+from . import Error, config, index, metadata, plan, recipe, record
 from .naming import parse_target
 from .registry import Registry
 
@@ -56,6 +56,23 @@ def cmd_index(args) -> None:
     args.out.write_text(json.dumps(state))
 
 
+def cmd_plan(args) -> None:
+    channel = _channel(args)
+    overrides = config.load_overrides(args.config / "overrides.toml")
+    try:
+        state = json.loads(args.state.read_text())
+    except (OSError, ValueError) as err:
+        raise Error(f"cannot read {args.state}: {err}") from None
+    sources = metadata.load(channel, args.cache)
+    conda_forge = metadata.conda_forge_r(channel, args.cache)
+    planner = plan.Planner(channel, sources, conda_forge, overrides, state, args.retry_failed)
+    results = planner.plan()
+    document = plan.ready(channel, results)
+    args.out.write_text(json.dumps(document, indent=1) + "\n")
+    args.summary.write_text(plan.summary(channel, planner, results))
+    print(f"{len(document['ready'])} targets ready")
+
+
 def parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, default=Path("."), metavar="DIR",
@@ -90,6 +107,13 @@ def parser() -> argparse.ArgumentParser:
     command = commands.add_parser("index", parents=[common], help="rebuild repodata from the registry")
     command.add_argument("--out", type=Path, required=True, metavar="FILE", help="write the channel state here")
     command.set_defaults(func=cmd_index)
+
+    command = commands.add_parser("plan", parents=[common], help="list the packages that are ready to build")
+    command.add_argument("--state", type=Path, required=True, metavar="FILE", help="output of the index command")
+    command.add_argument("--out", type=Path, required=True, metavar="FILE", help="write plan.json here")
+    command.add_argument("--summary", type=Path, required=True, metavar="FILE", help="write a Markdown summary here")
+    command.add_argument("--retry-failed", action="store_true", help="ignore recorded build failures")
+    command.set_defaults(func=cmd_plan)
 
     return root
 
