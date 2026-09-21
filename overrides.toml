@@ -7,3 +7,668 @@
 #
 # [package."BSgenome.Example.UCSC.xx1"]
 # skip = "source tarball exceeds the runner disk"
+
+[package.ADaCGH2]
+host = ["libopenblas"]
+
+[package.affy]
+build = ["automake"]
+
+[package.affyio]
+build = ["automake"]
+
+[package.akima]
+build = ["autoconf", "automake"]
+
+[package.archive]
+build = ["autoconf", "automake"]
+host = ["libarchive"]
+
+[package.arrow]
+host = ["libarrow", "libarrow-acero", "libarrow-compute", "libarrow-dataset", "libarrow-substrait", "libparquet"]
+
+[package.audio]
+build = ["autoconf", "automake"]
+
+[package.aws]
+build = ["autoconf", "automake"]
+
+[package.bamsignals]
+host = ["liblzma-devel"]
+
+[package.BASiCStan]
+build = ["automake"]
+
+[package.BayesSpace]
+build = ["automake"]
+
+[package."beachmat.tiledb"]
+build = ["automake"]
+
+[package.biganalytics]
+build = ["autoconf", "automake"]
+
+[package.bigmemory]
+build = ["autoconf", "automake"]
+
+[package.BiocParallel]
+build = ["automake"]
+
+[package.BRISC]
+build = ["autoconf", "automake"]
+
+[package.C50]
+build = ["autoconf", "automake"]
+
+[package.Cairo]
+build = ["autoconf", "automake"]
+host = ["freetype", "harfbuzz", "icu", "libjpeg-turbo", "libtiff", "expat", "glib"]
+
+[package.CBN2Path]
+build = ["automake"]
+
+[package.cellmig]
+build = ["automake"]
+
+[package.cfTools]
+build = ["automake"]
+
+[package.ChemmineOB]
+build = ["automake"]
+host = ["openbabel"]
+run = ["openbabel"]
+
+[package.clusterCrit]
+build = ["autoconf", "automake"]
+
+[package.ClustIRR]
+build = ["automake"]
+
+[package.CoGAPS]
+build = ["automake"]
+
+[package.coop]
+build = ["autoconf", "automake"]
+
+[package.csaw]
+host = ["liblzma-devel"]
+
+[package.cubature]
+build = ["gnuconfig", "autoconf", "automake"]
+
+[package.Cubist]
+build = ["autoconf", "automake"]
+
+[package.curl]
+build = ["autoconf", "automake"]
+
+[package.cytolib]
+build = ["automake"]
+
+[package.CytoML]
+build = ["automake"]
+
+[package.DataVisualizations]
+host = ["tbb-devel"]
+
+[package.decontX]
+build = ["automake"]
+
+[package.deepSNV]
+host = ["liblzma-devel"]
+
+[package.densEstBayes]
+build = ["autoconf", "automake"]
+host = ["tbb-devel"]
+
+[package.densvis]
+build = ["automake"]
+
+[package.DiffBind]
+host = ["liblzma-devel"]
+
+[package.diffHic]
+host = ["liblzma-devel"]
+
+[package.e1071]
+build = ["autoconf", "automake"]
+
+[package.epialleleR]
+host = ["liblzma-devel"]
+
+[package.epigraHMM]
+host = ["liblzma-devel"]
+
+[package.fftw]
+build = ["autoconf", "automake"]
+
+[package.fftwtools]
+build = ["autoconf", "automake"]
+
+[package.FLAMES]
+build = ["automake"]
+host = ["liblzma-devel", "glpk", "libcurl", "libxml2-devel >=2.14.5", "imagemagick", "bzip2", "ncurses"]
+run = ["libuv", "git", "python >=3.11,<3.12", "pip"]
+
+[package.float]
+build = ["autoconf", "automake"]
+
+[package.flowClust]
+build = ["automake"]
+
+[package.flowFP]
+build = ["automake"]
+
+[package.fmcsR]
+build = ["automake"]
+
+[package.fs]
+build = ["gnuconfig", "autoconf", "automake"]
+host = ["libuv"]
+
+[package.fstcore]
+host = ["lz4-c", "zstd"]
+run = ["lz4-c", "zstd"]
+
+[package.gdtools]
+build = ["autoconf", "automake"]
+host = ["expat", "fontconfig", "glib"]
+
+[package.GENESIS]
+host = ["libopenblas"]
+
+[package.gert]
+build = ["autoconf", "automake"]
+host = ["libgit2"]
+
+[package.ggiraph]
+build = ["autoconf", "automake"]
+
+[package.git2r]
+build = ["gnuconfig", "autoconf", "automake"]
+host = ["libgit2", "libssh2"]
+
+[package.GLAD]
+build = ["automake"]
+
+[package.gmapR]
+build = ["automake"]
+
+[package.gmp]
+build = ["autoconf", "automake"]
+
+[package.gsl]
+build = ["autoconf", "automake"]
+
+[package.h5vc]
+host = ["liblzma-devel"]
+
+[package.hdf5r]
+build = ["autoconf", "automake"]
+
+[package.HilbertVisGUI]
+build = ["automake"]
+
+[package.httpuv]
+build = ["gnuconfig", "autoconf", "automake"]
+host = ["libuv"]
+
+[package.huge]
+build = ["autoconf", "automake"]
+
+[package.iBMQ]
+build = ["automake"]
+
+[package.iClusterPlus]
+build = ["automake"]
+
+[package.IgGeneUsage]
+build = ["automake"]
+
+[package.igraph]
+build = ["autoconf", "automake"]
+host = ["gmp", "libxml2-devel", "liblzma-devel"]
+
+[package.IHWpaper]
+run = ["curl"]
+
+[package.ijtiff]
+build = ["autoconf", "automake"]
+
+[package.imager]
+build = ["autoconf", "automake"]
+
+[package.immunoClust]
+build = ["automake"]
+
+[package.iscream]
+build = ["automake"]
+host = ["liblzma-devel"]
+
+[package.isotree]
+build = ["autoconf", "automake"]
+
+[package.keyring]
+build = ["autoconf", "automake"]
+host = ["glib"]
+run = ["glib"]
+
+[package.later]
+build = ["autoconf", "automake"]
+
+[package.leidenbase]
+build = ["autoconf", "automake"]
+host = ["glpk", "liblzma-devel", "libxml2-devel"]
+
+[package.lpsymphony]
+build = ["automake"]
+
+[package.lwgeom]
+build = ["autoconf", "automake"]
+host = ["geos", "proj"]
+
+[package.maftools]
+host = ["liblzma-devel"]
+
+[package.magick]
+build = ["autoconf", "automake"]
+host = ["imagemagick"]
+run = ["imagemagick"]
+
+[package.makecdfenv]
+build = ["automake"]
+
+[package.maps]
+build = ["autoconf", "automake"]
+
+[package.mashr]
+build = ["autoconf", "automake"]
+host = ["gsl"]
+
+[package.Matrix]
+host = ["libblas", "liblapack"]
+
+[package.MatrixExtra]
+build = ["autoconf", "automake"]
+
+[package.MCMCpack]
+build = ["autoconf", "automake"]
+
+[package.memuse]
+build = ["autoconf", "automake"]
+
+[package.MetaboDynamics]
+build = ["automake"]
+
+[package.methylKit]
+host = ["liblzma-devel"]
+
+[package.mgsa]
+build = ["automake"]
+
+[package.microbenchmark]
+build = ["autoconf", "automake"]
+
+[package.MicrobiomeStat]
+build = ["autoconf", "automake"]
+host = ["nlopt"]
+
+[package.mitoClone2]
+host = ["liblzma-devel"]
+
+[package.mmand]
+build = ["autoconf", "automake"]
+
+[package.MOFA2]
+build = ["automake"]
+
+[package.MOFAdata]
+run = ["curl"]
+
+[package.msa]
+build = ["automake"]
+
+[package.mzR]
+build = ["automake"]
+
+[package.nanoarrow]
+build = ["autoconf", "automake"]
+
+[package.nanonext]
+build = ["autoconf", "automake"]
+host = ["nng >=1.9.0", "mbedtls"]
+run = ["mbedtls", "nng"]
+
+[package.ncdf4]
+build = ["autoconf", "automake"]
+host = ["hdf5"]
+run = ["hdf5"]
+
+[package.netboost]
+build = ["automake"]
+
+[package.NetPathMiner]
+build = ["automake"]
+
+[package.nloptr]
+build = ["gnuconfig", "autoconf", "automake"]
+host = ["nlopt"]
+run = ["nlopt"]
+
+[package.oligo]
+build = ["automake"]
+
+[package.openssl]
+build = ["autoconf", "automake"]
+
+[package.ore]
+build = ["autoconf", "automake"]
+
+[package.pander]
+host = ["pandoc"]
+run = ["pandoc"]
+
+[package.pbdZMQ]
+build = ["gnuconfig", "autoconf", "automake"]
+host = ["zeromq"]
+
+[package.pdftools]
+build = ["autoconf", "automake"]
+host = ["poppler", "expat"]
+
+[package.PhyloProfileData]
+run = ["curl"]
+
+[package.podkat]
+host = ["liblzma-devel"]
+
+[package.polyclip]
+build = ["autoconf", "automake"]
+
+[package.ppcseq]
+build = ["automake"]
+
+[package.preprocessCore]
+build = ["automake"]
+host = ["libblas", "liblapack"]
+
+[package.protolite]
+build = ["autoconf", "automake"]
+host = ["libprotobuf"]
+
+[package.proxyC]
+build = ["autoconf", "automake", "tbb-devel"]
+host = ["tbb-devel"]
+
+[package.ps]
+build = ["autoconf", "automake"]
+
+[package.qpdf]
+build = ["autoconf", "automake"]
+
+[package.qpgraph]
+build = ["automake"]
+
+[package.qqconf]
+build = ["autoconf", "automake"]
+
+[package.qs2]
+build = ["autoconf", "automake"]
+host = ["zstd"]
+run = ["zstd"]
+
+[package.quanteda]
+host = ["tbb-devel"]
+
+[package.QuasR]
+host = ["liblzma-devel"]
+
+[package.raer]
+host = ["liblzma", "liblzma-devel"]
+
+[package.ragg]
+build = ["autoconf", "automake"]
+
+[package.randomForestSRC]
+build = ["autoconf", "automake"]
+
+[package.Rarr]
+build = ["automake"]
+
+[package.RbowtieCuda]
+build = ["automake"]
+
+[package.rcdd]
+build = ["autoconf", "automake"]
+
+[package.RcppArmadillo]
+build = ["autoconf", "automake"]
+
+[package.RcppDist]
+build = ["autoconf", "automake"]
+
+[package.RcppGSL]
+build = ["autoconf", "automake"]
+
+[package.RcppParallel]
+build = ["autoconf", "automake"]
+host = ["tbb-devel"]
+run = ["tbb-devel", "tbb"]
+
+[package.RcppPlanc]
+build = ["autoconf", "automake", "highfive"]
+host = ["libplanc"]
+
+[package.RCurl]
+build = ["autoconf", "automake"]
+host = ["liblzma-devel", "libxml2-devel"]
+
+[package.Rdisop]
+build = ["automake"]
+
+[package.readxl]
+host = ["libiconv"]
+
+[package.redux]
+build = ["autoconf", "automake"]
+host = ["libhiredis"]
+run = ["libhiredis"]
+
+[package.Rfast]
+host = ["tbb-devel"]
+
+[package.Rfastp]
+host = ["liblzma-devel"]
+
+[package.rgl]
+build = ["autoconf", "automake"]
+
+[package.Rgraphviz]
+build = ["autoconf", "automake", "libtool", "gnuconfig"]
+
+[package.rhdf5]
+build = ["automake"]
+
+[package.rhdf5filters]
+build = ["automake"]
+
+[package.Rhdf5lib]
+build = ["automake"]
+
+[package.RhpcBLASctl]
+build = ["autoconf", "automake"]
+
+[package.Rhtslib]
+build = ["automake"]
+
+[package.ridge]
+build = ["autoconf", "automake"]
+
+[package.Rigraphlib]
+build = ["automake"]
+
+[package.rjags]
+build = ["autoconf", "automake"]
+
+[package.rJava]
+build = ["autoconf", "automake"]
+host = ["liblzma-devel", "openjdk"]
+
+[package.RJSONIO]
+build = ["autoconf", "automake"]
+
+[package.RMariaDB]
+build = ["autoconf", "automake"]
+host = ["mariadb-connector-c"]
+run = ["mariadb-connector-c"]
+
+[package.Rmixmod]
+build = ["autoconf", "automake"]
+
+[package.Rmpfr]
+build = ["autoconf", "automake"]
+
+[package.Rmpi]
+build = ["autoconf", "automake"]
+host = ["openmpi"]
+run = ["openmpi"]
+
+[package.RMySQL]
+build = ["autoconf", "automake"]
+host = ["mariadb-connector-c"]
+run = ["mariadb-connector-c"]
+
+[package.RNifti]
+build = ["autoconf", "automake"]
+
+[package.RProtoBufLib]
+build = ["autoconf", "automake", "libtool", "gnuconfig"]
+
+[package.Rsamtools]
+host = ["bzip2", "libcurl", "liblzma-devel"]
+
+[package.rsbml]
+build = ["automake"]
+host = ["libxml2-devel"]
+
+[package.rsparse]
+build = ["autoconf", "automake"]
+
+[package.RSQLite]
+host = ["libcurl"]
+
+[package.rstan]
+host = ["tbb-devel"]
+
+[package.Rsubread]
+build = ["automake"]
+
+[package.rsvg]
+build = ["autoconf", "automake"]
+host = ["cairo", "expat", "glib", "librsvg"]
+
+[package.rtracklayer]
+build = ["automake"]
+
+[package.s2]
+build = ["autoconf", "automake"]
+host = ["libabseil"]
+
+[package.scMET]
+build = ["automake"]
+
+[package.scPipe]
+host = ["liblzma-devel"]
+
+[package.scrypt]
+build = ["autoconf", "automake"]
+
+[package.seqminer]
+build = ["autoconf", "automake"]
+host = ["zstd"]
+
+[package.sf]
+build = ["autoconf", "automake"]
+host = ["geos", "libgdal-core", "proj"]
+run = ["libgdal-core", "proj"]
+
+[package.SharedObject]
+build = ["automake"]
+
+[package.ShortRead]
+build = ["automake"]
+host = ["liblzma-devel"]
+
+[package.showtext]
+build = ["autoconf", "automake"]
+
+[package.SICtools]
+host = ["ncurses"]
+run = ["ncurses"]
+
+[package.SpliceWiz]
+build = ["automake"]
+
+[package.stPipe]
+host = ["liblzma-devel"]
+
+[package.stringfish]
+build = ["autoconf", "automake"]
+host = ["pcre2", "tbb-devel"]
+
+[package.stringi]
+build = ["autoconf", "automake"]
+host = ["icu"]
+
+[package.sysfonts]
+build = ["autoconf", "automake"]
+
+[package.systemfonts]
+build = ["autoconf", "automake"]
+
+[package.terra]
+build = ["autoconf", "automake"]
+host = ["libgdal-core", "proj", "geos"]
+run = ["proj", "libgdal-core"]
+
+[package.textshaping]
+build = ["autoconf", "automake"]
+host = ["harfbuzz", "fribidi"]
+
+[package.tiff]
+build = ["autoconf", "automake"]
+
+[package.tiledb]
+host = ["tiledb 2.30.*"]
+
+[package.tkrplot]
+build = ["autoconf", "automake"]
+host = ["tk"]
+
+[package.torch]
+build = ["autoconf", "automake"]
+
+[package.tweedie]
+build = ["autoconf", "automake"]
+
+[package.units]
+build = ["autoconf", "automake"]
+host = ["udunits2"]
+
+[package.uuid]
+build = ["autoconf", "automake"]
+
+[package.V8]
+build = ["autoconf", "automake"]
+
+[package.VariantAnnotation]
+host = ["liblzma-devel"]
+
+[package.XML]
+build = ["autoconf", "automake"]
+host = ["liblzma-devel", "libxml2-devel"]
+run = ["libxml2-devel"]
+
+[package.xml2]
+build = ["gnuconfig", "autoconf", "automake"]
+host = ["libxml2-devel"]
