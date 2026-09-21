@@ -15,12 +15,13 @@ on:
 permissions: {}
 
 jobs:
-  # Runs the package build scripts, so it gets no registry credentials.
+  # Runs the package's build scripts, so it has read-only package access and logs out of GHCR before they run.
   build:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 300
     permissions:
       contents: read
+      packages: read
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       sha256: ${{ steps.package.outputs.sha256 }}
@@ -50,25 +51,78 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      # Linux builds run in the builder image; other runners build on the host.
+      - name: Find builder image
+        id: builder
+        if: runner.os == 'Linux'
+        run: python -m biocpkgconda builder-image
+      - name: Pull builder image
+        if: runner.os == 'Linux'
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILDER_IMAGE: ${{ steps.builder.outputs.image }}
+        run: |
+          trap 'docker logout ghcr.io' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker pull "$BUILDER_IMAGE"
       - name: Install Python dependencies
+        if: runner.os != 'Linux'
         run: python -m pip install --require-hashes --no-deps -r requirements.txt
       - name: Install rattler-build
+        if: runner.os != 'Linux'
         run: |
           python -m biocpkgconda install-rattler-build --dest "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Fetch conda-forge pinning
+        if: runner.os != 'Linux'
         run: python -m biocpkgconda fetch-pinning --dest "$RUNNER_TEMP/cbc"
+      # The container sees the checkout read-only and can write to work/ only.
       - name: Render recipe
         id: recipe
-        run: python -m biocpkgconda recipe --target="$TARGET" --out work/recipe --cache "$RUNNER_TEMP/cache"
+        env:
+          BUILDER_IMAGE: ${{ steps.builder.outputs.image }}
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            mkdir -p work
+            docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+              -v "$PWD:/work:ro" -v "$PWD/work:/work/work" -w /work "$BUILDER_IMAGE" \
+              python -m biocpkgconda recipe --target="$TARGET" --out work/recipe --cache work/cache
+          else
+            python -m biocpkgconda recipe --target="$TARGET" --out work/recipe --cache "$RUNNER_TEMP/cache"
+          fi
+      # Uploaded before the build, which can write to work/.
+      - name: Upload recipe
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: recipe-${{ steps.target.outputs.name }}
+          path: work/recipe
+          if-no-files-found: ignore
+          retention-days: 14
       # Ends before the job timeout, so a build that runs out of time counts as a failed build.
       - name: Build
         id: build
         timeout-minutes: 240
+        env:
+          BUILDER_IMAGE: ${{ steps.builder.outputs.image }}
         run: |
-          python -m biocpkgconda build --recipe work/recipe --output-dir work/out \
-            --variant-config "$RUNNER_TEMP/cbc/conda_build_config.yaml" \
-            --markdown-summary "$GITHUB_STEP_SUMMARY"
+          if [ "$RUNNER_OS" = Linux ]; then
+            status=0
+            docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+              -v "$PWD:/work:ro" -v "$PWD/work:/work/work" -w /work "$BUILDER_IMAGE" \
+              python -m biocpkgconda build --recipe work/recipe --output-dir work/out \
+                --variant-config /opt/conda-build-config/conda_build_config.yaml \
+                --markdown-summary work/summary.md || status=$?
+            if [ -f work/summary.md ] && [ ! -L work/summary.md ]; then
+              cat work/summary.md >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit "$status"
+          else
+            python -m biocpkgconda build --recipe work/recipe --output-dir work/out \
+              --variant-config "$RUNNER_TEMP/cbc/conda_build_config.yaml" \
+              --markdown-summary "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Hash package
         id: package
         env:
@@ -86,7 +140,12 @@ jobs:
             echo "::error::the build wrote a package whose file name is not a package file name"
             exit 1
           fi
-          sha256=$(python -c 'import hashlib, sys; print(hashlib.file_digest(open(sys.argv[1], "rb"), "sha256").hexdigest())' "${files[0]}")
+          # The build wrote work/out, so a link there could point at any file on the runner.
+          if [ -L work/out ] || [ -L "work/out/$SUBDIR" ] || [ -L "${files[0]}" ] || [ ! -f "${files[0]}" ]; then
+            echo "::error::${files[0]} is not a regular file"
+            exit 1
+          fi
+          sha256=$(python -I -c 'import hashlib, sys; print(hashlib.file_digest(open(sys.argv[1], "rb"), "sha256").hexdigest())' "${files[0]}")
           {
             echo "path=${files[0]}"
             echo "filename=$filename"
@@ -101,15 +160,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
-      - name: Upload recipe
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: recipe-${{ steps.target.outputs.name }}
-          path: work/recipe
-          if-no-files-found: ignore
-          retention-days: 14
 
   publish:
     needs: build
