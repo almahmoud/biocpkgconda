@@ -1,0 +1,70 @@
+name: Build packages
+run-name: build ${{ inputs.label }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'JSON array of {"target": "<subdir>/<Package>", "runner": "<runner label>"}'
+        required: true
+        type: string
+      label:
+        description: Name shown for this run
+        type: string
+        default: manual
+
+permissions: {}
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Validate targets
+        id: matrix
+        env:
+          TARGETS: ${{ inputs.targets }}
+          LABEL: ${{ inputs.label }}
+        run: python -m biocpkgconda matrix --targets="$TARGETS" --label="$LABEL"
+
+  package:
+    needs: setup
+    name: ${{ matrix.target }}
+    # Jobs in package.yml can only narrow these permissions.
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    uses: ./.github/workflows/package.yml
+    with:
+      target: ${{ matrix.target }}
+      runner: ${{ matrix.runner }}
+
+  sync:
+    needs: package
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Start the next sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh workflow run sync.yml -f after_run="$RUN_ID"

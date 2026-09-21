@@ -1,0 +1,101 @@
+name: Sync channel
+
+on:
+  workflow_dispatch:
+    inputs:
+      after_run:
+        description: ID of the build run that started this sync
+        type: string
+        default: ""
+      retry_failed:
+        description: Retry packages whose builds failed
+        type: boolean
+        default: false
+      dry_run:
+        description: Plan without starting builds
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Python dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements.txt
+      # setup-oras v2.0.1 lists ORAS releases up to 1.3.3.
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        with:
+          url: https://github.com/oras-project/oras/releases/download/v1.3.4/oras_1.3.4_linux_amd64.tar.gz
+          checksum: f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454
+      - name: Log in to GHCR
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      # A dry run dispatches nothing, so it does not wait for running builds.
+      - name: Check running builds
+        id: builds
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          AFTER_RUN: ${{ inputs.after_run }}
+        run: python -m biocpkgconda check-builds --after-run="$AFTER_RUN"
+      # The sync that follows the running builds does not retry failed packages.
+      - name: Refuse to retry while builds run
+        if: steps.builds.outputs.active == 'true' && inputs.retry_failed
+        run: |
+          echo "::error::Builds are in progress. Start the sync with retry_failed again once they finish."
+          exit 1
+      - name: Index registry
+        id: index
+        if: inputs.dry_run || steps.builds.outputs.active == 'false'
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m biocpkgconda index --out "$RUNNER_TEMP/state.json"
+      - name: Check channel
+        id: channel
+        if: inputs.dry_run || steps.builds.outputs.active == 'false'
+        run: python -m biocpkgconda check-channel
+      - name: Plan
+        if: steps.channel.outputs.reachable == 'true'
+        env:
+          RETRY_FAILED: ${{ inputs.retry_failed }}
+        run: |
+          flags=()
+          if [ "$RETRY_FAILED" = "true" ]; then flags+=(--retry-failed); fi
+          python -m biocpkgconda plan --state "$RUNNER_TEMP/state.json" --out "$RUNNER_TEMP/plan.json" \
+            --summary "$GITHUB_STEP_SUMMARY" --cache "$RUNNER_TEMP/cache" "${flags[@]}"
+      # Ends the chain of build runs and syncs once builds publish nothing; scheduled syncs pick it up again.
+      - name: Stop the build chain
+        if: steps.channel.outputs.reachable == 'true' && inputs.after_run && steps.index.outputs.added == '0'
+        run: |
+          echo "Nothing new was published since the last sync, so no builds were dispatched." \
+            "The next scheduled sync continues." >> "$GITHUB_STEP_SUMMARY"
+      - name: Dispatch builds
+        if: steps.channel.outputs.reachable == 'true' && (!inputs.after_run || steps.index.outputs.added != '0')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          flags=()
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          python -m biocpkgconda dispatch --plan "$RUNNER_TEMP/plan.json" "${flags[@]}"
