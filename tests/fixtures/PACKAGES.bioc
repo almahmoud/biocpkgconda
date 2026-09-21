@@ -1,0 +1,28 @@
+Package: BiocGenerics
+Version: 0.58.1
+Depends: R (>= 4.0.0), methods, utils, graphics, stats, generics
+Imports: methods, utils, graphics, stats
+Suggests: Biobase, S4Vectors, IRanges
+License: Artistic-2.0
+MD5sum: 0b8f2a5e8f3c1d2b4a6e9f0c1d2e3f4a
+NeedsCompilation: no
+
+Package: DESeq2
+Version: 1.52.0
+Depends: S4Vectors (>= 0.23.18), IRanges, GenomicRanges,
+        SummarizedExperiment (>= 1.1.6)
+Imports: BiocGenerics (>= 0.7.5), Biobase, BiocParallel, matrixStats,
+        methods, stats4, locfit, ggplot2 (>= 3.4.0), Rcpp (>= 0.11.0),
+        MatrixGenerics
+LinkingTo: Rcpp, RcppArmadillo
+Suggests: testthat, knitr, rmarkdown
+License: LGPL (>= 3)
+MD5sum: 5e8a7c1f0d9b3a2e4c6f8a0b1d3e5f7a
+NeedsCompilation: yes
+
+Package: NewR
+Version: 1.0.0
+Depends: R (>= 4.7.0)
+License: MIT + file LICENSE
+MD5sum: 11111111111111111111111111111111
+NeedsCompilation: no

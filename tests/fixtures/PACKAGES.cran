@@ -1,0 +1,24 @@
+Package: Rcpp
+Version: 1.1.0
+Imports: methods, utils
+License: GPL (>= 2)
+MD5sum: 22222222222222222222222222222222
+NeedsCompilation: yes
+
+Package: Matrix
+Version: 1.7-6
+Priority: recommended
+Depends: R (>= 4.4), methods
+Imports: grDevices, graphics, grid, lattice, stats, utils
+License: GPL (>= 2) | file LICENCE
+MD5sum: 33333333333333333333333333333333
+NeedsCompilation: yes
+
+Package: Matrix
+Version: 1.7-6
+Priority: recommended
+Depends: R (>= 4.7), methods
+License: GPL (>= 2) | file LICENCE
+MD5sum: 44444444444444444444444444444444
+NeedsCompilation: yes
+Path: 4.7.0/Recommended

@@ -1,0 +1,17 @@
+{
+  "info": {"subdir": "noarch"},
+  "packages": {
+    "r-old-1.0-r44_0.tar.bz2": {"name": "r-old", "version": "1.0", "depends": ["r-base >=4.4,<4.5.0a0"]}
+  },
+  "packages.conda": {
+    "r-ggplot2-4.0.3-r46h785f33e_0.conda": {"name": "r-ggplot2", "version": "4.0.3", "depends": ["r-base >=4.6,<4.7.0a0", "r-cli"]},
+    "r-ggplot2-4.0.3-r45h785f33e_0.conda": {"name": "r-ggplot2", "version": "4.0.3", "depends": ["r-base >=4.5,<4.6.0a0"]},
+    "r-base64enc-0.1_3-r45_0.conda": {"name": "r-base64enc", "version": "0.1_3", "depends": ["r-base >=4.5,<4.6.0a0"]},
+    "r-loose-1.0-r46_0.conda": {"name": "r-loose", "version": "1.0", "depends": ["r-base >=4.6.1"]},
+    "r-xml-3.99_0.22-r46h1a2b3c4_0.conda": {"name": "r-xml", "version": "3.99_0.22", "depends": ["r-base >=4.6,<4.7.0a0"]},
+    "r-xml-3.99_0.23-r45h1a2b3c4_0.conda": {"name": "r-xml", "version": "3.99_0.23", "depends": ["r-base >=4.5,<4.6.0a0"]},
+    "python-3.12.0-0.conda": {"name": "python", "version": "3.12.0", "depends": []}
+  },
+  "removed": [],
+  "repodata_version": 1
+}
