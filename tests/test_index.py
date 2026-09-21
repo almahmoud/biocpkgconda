@@ -1,17 +1,19 @@
 import hashlib
 import io
 import json
+import os
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from biocpkgconda import index
+from biocpkgconda import __main__, index
 from biocpkgconda.config import REGISTRY_DESCRIPTION
 from biocpkgconda.naming import failure_tag, package_tag
 from biocpkgconda.registry import FAILURE, INDEX, PACKAGE_V2, REPODATA, REPODATA_ZST
 
-from .support import FakeRegistry, requires_zstandard
+from .support import ROOT, FakeRegistry, requires_zstandard
 
 SOURCE = "https://github.com/example/channel"
 
@@ -205,6 +207,19 @@ class IndexTest(unittest.TestCase):
             "linux-64": [],
         })
         self.assertEqual(state["failures"][0]["attempts"], 1)
+
+
+class CommandTest(unittest.TestCase):
+    def test_index_command(self):
+        state = {"subdirs": {"noarch": []}, "failures": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            environ = {"GITHUB_REPOSITORY": "example/channel", "GITHUB_OUTPUT": str(tmp / "output")}
+            with mock.patch.dict(os.environ, environ), mock.patch.object(index, "index", return_value=(state, 3)):
+                code = __main__.main(["index", "--config", str(ROOT), "--out", str(tmp / "state.json")])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads((tmp / "state.json").read_text()), state)
+            self.assertEqual((tmp / "output").read_text(), "added=3\n")
 
 
 @requires_zstandard

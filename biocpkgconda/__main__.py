@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import Error, config, index, metadata, plan, recipe, record, tools
+from . import Error, actions, config, index, metadata, plan, recipe, record, tools
 from .naming import parse_target
 from .registry import Registry
 
@@ -52,8 +52,9 @@ def cmd_fail(args) -> None:
 def cmd_index(args) -> None:
     channel = _channel(args)
     registry, source = _registry(channel)
-    state, _ = index.index(registry, channel.subdirs, source)
+    state, added = index.index(registry, channel.subdirs, source)
     args.out.write_text(json.dumps(state))
+    actions.set_output("added", str(added))
 
 
 def cmd_plan(args) -> None:
@@ -83,6 +84,26 @@ def cmd_fetch_pinning(args) -> None:
 
 def cmd_build(args) -> int:
     return tools.build(_channel(args), args.recipe, args.output_dir, args.variant_config, args.markdown_summary)
+
+
+def cmd_check_channel(args) -> None:
+    actions.check_channel(_channel(args))
+
+
+def cmd_check_builds(args) -> None:
+    actions.check_builds(args.after_run)
+
+
+def cmd_matrix(args) -> None:
+    actions.set_output("matrix", actions.matrix(_channel(args), args.targets, args.label))
+
+
+def cmd_dispatch(args) -> None:
+    try:
+        document = json.loads(args.plan.read_text())
+    except (OSError, ValueError) as err:
+        raise Error(f"cannot read {args.plan}: {err}") from None
+    actions.dispatch(_channel(args), document, args.dry_run)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -143,6 +164,25 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--variant-config", type=Path, required=True, metavar="FILE")
     command.add_argument("--markdown-summary", type=Path, metavar="FILE")
     command.set_defaults(func=cmd_build)
+
+    command = commands.add_parser("check-channel", parents=[common],
+                                  help="check that the channel URL serves repodata.json for every platform")
+    command.set_defaults(func=cmd_check_channel)
+
+    command = commands.add_parser("check-builds", parents=[common],
+                                  help="check whether other build workflow runs are still active")
+    command.add_argument("--after-run", default="", metavar="ID", help="build run that triggered this sync")
+    command.set_defaults(func=cmd_check_builds)
+
+    command = commands.add_parser("matrix", parents=[common], help="validate build targets and emit the job matrix")
+    command.add_argument("--targets", required=True, help='JSON array of {"target", "runner"} objects')
+    command.add_argument("--label", required=True)
+    command.set_defaults(func=cmd_matrix)
+
+    command = commands.add_parser("dispatch", parents=[common], help="start build workflow runs for a plan")
+    command.add_argument("--plan", type=Path, required=True, metavar="FILE", help="output of the plan command")
+    command.add_argument("--dry-run", action="store_true", help="print the shards without dispatching")
+    command.set_defaults(func=cmd_dispatch)
 
     return root
 
