@@ -1,10 +1,11 @@
 """Command line interface: python -m biocpkgconda <command>."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from . import Error, config, metadata, recipe, record
+from . import Error, config, index, metadata, recipe, record
 from .naming import parse_target
 from .registry import Registry
 
@@ -48,6 +49,13 @@ def cmd_fail(args) -> None:
     record.fail(target, args.run_url, registry, metadata.load(channel, args.cache), source)
 
 
+def cmd_index(args) -> None:
+    channel = _channel(args)
+    registry, source = _registry(channel)
+    state, _ = index.index(registry, channel.subdirs, source)
+    args.out.write_text(json.dumps(state))
+
+
 def parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, default=Path("."), metavar="DIR",
@@ -78,6 +86,10 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--target", required=True, help="<subdir>/<Package>")
     command.add_argument("--run-url", required=True, help="URL of the failed workflow run")
     command.set_defaults(func=cmd_fail)
+
+    command = commands.add_parser("index", parents=[common], help="rebuild repodata from the registry")
+    command.add_argument("--out", type=Path, required=True, metavar="FILE", help="write the channel state here")
+    command.set_defaults(func=cmd_index)
 
     return root
 
