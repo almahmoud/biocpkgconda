@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import Error, config, index, metadata, plan, recipe, record
+from . import Error, config, index, metadata, plan, recipe, record, tools
 from .naming import parse_target
 from .registry import Registry
 
@@ -73,6 +73,18 @@ def cmd_plan(args) -> None:
     print(f"{len(document['ready'])} targets ready")
 
 
+def cmd_install_rattler_build(args) -> None:
+    print(f"installed {tools.install_rattler_build(_channel(args), args.dest)}")
+
+
+def cmd_fetch_pinning(args) -> None:
+    print(f"wrote {tools.fetch_pinning(_channel(args), args.dest)}")
+
+
+def cmd_build(args) -> int:
+    return tools.build(_channel(args), args.recipe, args.output_dir, args.variant_config, args.markdown_summary)
+
+
 def parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, default=Path("."), metavar="DIR",
@@ -114,6 +126,23 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--summary", type=Path, required=True, metavar="FILE", help="write a Markdown summary here")
     command.add_argument("--retry-failed", action="store_true", help="ignore recorded build failures")
     command.set_defaults(func=cmd_plan)
+
+    command = commands.add_parser("install-rattler-build", parents=[common],
+                                  help="download the pinned rattler-build and verify its checksum")
+    command.add_argument("--dest", type=Path, required=True, metavar="DIR")
+    command.set_defaults(func=cmd_install_rattler_build)
+
+    command = commands.add_parser("fetch-pinning", parents=[common],
+                                  help="download conda_build_config.yaml from the pinned conda-forge-pinning commit")
+    command.add_argument("--dest", type=Path, required=True, metavar="DIR")
+    command.set_defaults(func=cmd_fetch_pinning)
+
+    command = commands.add_parser("build", parents=[common], help="run rattler-build with the channel settings")
+    command.add_argument("--recipe", type=Path, required=True, metavar="DIR")
+    command.add_argument("--output-dir", type=Path, required=True, metavar="DIR")
+    command.add_argument("--variant-config", type=Path, required=True, metavar="FILE")
+    command.add_argument("--markdown-summary", type=Path, metavar="FILE")
+    command.set_defaults(func=cmd_build)
 
     return root
 
