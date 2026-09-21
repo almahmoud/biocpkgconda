@@ -1,11 +1,14 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from biocpkgconda import Error, config
+from biocpkgconda import Error, __main__, config
 
 ROOT = Path(__file__).resolve().parent.parent
 CHANNEL = (ROOT / "channel.toml").read_text()
+IMAGE = '# image = "ghcr.io/almahmoud/biocpkgconda-builder:3.23"'
 
 
 def load(text):
@@ -28,6 +31,7 @@ class ChannelTest(unittest.TestCase):
         self.assertEqual(channel.subdirs, ("noarch", "linux-64", "osx-arm64"))
         self.assertEqual(channel.build_subdirs, ("linux-64", "osx-arm64"))
         self.assertEqual((channel.shard_size, channel.max_attempts), (100, 2))
+        self.assertIsNone(channel.image)
         self.assertEqual(channel.rattler_build_version, "0.76.1")
         self.assertEqual(set(channel.rattler_build_sha256),
                          {"x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl", "aarch64-apple-darwin"})
@@ -63,6 +67,13 @@ class ChannelTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, load(CHANNEL.replace('upstream = ["conda-forge"]', f'upstream = ["{name}"]', 1)).upstream)
 
+    def test_invalid_image(self):
+        for image in ('"ghcr.io/almahmoud/biocpkgconda-builder"', '"ghcr.io/Almahmoud/biocpkgconda-builder:3.23"',
+                      '"ghcr.io:5000/almahmoud/biocpkgconda-builder:3.23"', '"biocpkgconda-builder:3.23"',
+                      '"ghcr.io/almahmoud/biocpkgconda-builder@sha256:abc"', "3.23"):
+            with self.subTest(image=image), self.assertRaises(Error):
+                load(CHANNEL.replace(IMAGE, f"image = {image}"))
+
     def test_largest_shard(self):
         self.assertEqual(load(CHANNEL.replace("shard_size = 100", "shard_size = 120", 1)).shard_size, 120)
 
@@ -89,3 +100,28 @@ class RegistryReferenceTest(unittest.TestCase):
                                        'registry = "ghcr.io/example/conda-channel"'))
         self.assertEqual(config.registry_reference(channel, {"GITHUB_REPOSITORY": "other/repo"}),
                          ("ghcr.io", "example/conda-channel"))
+
+
+class BuilderImageTest(unittest.TestCase):
+    def test_from_environment(self):
+        channel = config.load_channel(ROOT / "channel.toml")
+        self.assertEqual(config.builder_image(channel, {"GITHUB_REPOSITORY": "AlMahmoud/BiocPkgConda"}),
+                         "ghcr.io/almahmoud/biocpkgconda-builder:3.23")
+        with self.assertRaises(Error):
+            config.builder_image(channel, {})
+
+    def test_configured(self):
+        digest = "sha256:" + "0" * 64
+        for image in ("ghcr.io/example/builder:3.23-R-4.6.1", f"ghcr.io/example/builder@{digest}",
+                      f"quay.io/example/conda/builder:v1@{digest}"):
+            with self.subTest(image=image):
+                channel = load(CHANNEL.replace(IMAGE, f'image = "{image}"'))
+                self.assertEqual(config.builder_image(channel, {"GITHUB_REPOSITORY": "other/repo"}), image)
+
+    def test_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            environ = {"GITHUB_REPOSITORY": "almahmoud/biocpkgconda", "GITHUB_OUTPUT": f"{tmp}/output"}
+            with mock.patch.dict(os.environ, environ):
+                self.assertEqual(__main__.main(["builder-image", "--config", str(ROOT)]), 0)
+            self.assertEqual(Path(environ["GITHUB_OUTPUT"]).read_text(),
+                             "image=ghcr.io/almahmoud/biocpkgconda-builder:3.23\n")

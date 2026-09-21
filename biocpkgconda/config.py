@@ -19,6 +19,8 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _HOST = re.compile(r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
 _REPOSITORY = re.compile(r"[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)+")
+_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _RUNNER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _CHANNEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/:-]*")
 # Anaconda's own repository, which needs a paid license at organizations over 200 people.
@@ -37,6 +39,7 @@ class Channel:
     platforms: dict[str, str]
     shard_size: int
     max_attempts: int
+    image: str | None
     pinning: str
     rattler_build_version: str
     rattler_build_sha256: dict[str, str]
@@ -124,6 +127,9 @@ def load_channel(path: Path) -> Channel:
     max_attempts = _value(build, "max_attempts", int, "build")
     if max_attempts < 1:
         raise Error("build.max_attempts must be at least 1")
+    image = _value(build, "image", str, "build", required=False)
+    if image is not None:
+        _check_image(image)
 
     sha256 = _value(rattler, "sha256", dict, "build.rattler-build")
     for target, digest in sha256.items():
@@ -140,6 +146,7 @@ def load_channel(path: Path) -> Channel:
         platforms=dict(platforms),
         shard_size=shard_size,
         max_attempts=max_attempts,
+        image=image,
         pinning=_match(_COMMIT, _value(build, "pinning", str, "build"), "pinning commit"),
         rattler_build_version=_match(_SEMVER, _value(rattler, "version", str, "build.rattler-build"),
                                      "rattler-build version"),
@@ -163,6 +170,28 @@ def registry_reference(channel: Channel, environ=os.environ) -> tuple[str, str]:
         raise Error("set channel.registry in channel.toml, or GITHUB_REPOSITORY in the environment")
     # GHCR accepts lowercase names only.
     return _split_registry(f"ghcr.io/{repository.lower()}")
+
+
+def _check_image(reference: str) -> str:
+    name, _, digest = reference.partition("@")
+    host, _, path = name.partition("/")
+    repository, _, tag = path.partition(":")
+    if not (_HOST.fullmatch(host) and _REPOSITORY.fullmatch(repository) and (tag or digest)
+            and (not tag or _TAG.fullmatch(tag)) and (not digest or _DIGEST.fullmatch(digest))):
+        raise Error(f"invalid image {reference!r}; expected <host>/<owner>/<name>:<tag> or "
+                    "<host>/<owner>/<name>@sha256:<digest> in lowercase")
+    return reference
+
+
+def builder_image(channel: Channel, environ=os.environ) -> str:
+    """Container image that Linux packages are built in."""
+    if channel.image:
+        return channel.image
+    repository = environ.get("GITHUB_REPOSITORY")
+    if not repository:
+        raise Error("set build.image in channel.toml, or GITHUB_REPOSITORY in the environment")
+    owner = repository.partition("/")[0].lower()
+    return _check_image(f"ghcr.io/{owner}/biocpkgconda-builder:{channel.bioc_version}")
 
 
 @dataclass(frozen=True)

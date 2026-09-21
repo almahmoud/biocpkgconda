@@ -24,6 +24,9 @@ osx-arm64 = "macos-15"
 [build]
 shard_size = 100  # targets per build workflow run, at most 120
 max_attempts = 2  # builds of a package version before it counts as failed
+# Container image for builds on Linux runners.
+# Defaults to ghcr.io/<owner>/biocpkgconda-builder:<Bioconductor version> of the workflow when unset.
+# image = "ghcr.io/almahmoud/biocpkgconda-builder:3.23"
 # conda-forge-pinning-feedstock commit providing compiler and stdlib versions.
 pinning = "b7dd4c111e066f157c7fd6f98ec5e1760534db94"
 

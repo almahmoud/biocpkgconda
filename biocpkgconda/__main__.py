@@ -86,6 +86,10 @@ def cmd_build(args) -> int:
     return tools.build(_channel(args), args.recipe, args.output_dir, args.variant_config, args.markdown_summary)
 
 
+def cmd_builder_image(args) -> None:
+    actions.set_output("image", config.builder_image(_channel(args)))
+
+
 def cmd_check_channel(args) -> None:
     actions.check_channel(_channel(args))
 
@@ -164,6 +168,10 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--variant-config", type=Path, required=True, metavar="FILE")
     command.add_argument("--markdown-summary", type=Path, metavar="FILE")
     command.set_defaults(func=cmd_build)
+
+    command = commands.add_parser("builder-image", parents=[common],
+                                  help="print the container image for builds on Linux runners")
+    command.set_defaults(func=cmd_builder_image)
 
     command = commands.add_parser("check-channel", parents=[common],
                                   help="check that the channel URL serves repodata.json for every platform")

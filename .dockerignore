@@ -1,0 +1,7 @@
+*
+!biocpkgconda/
+!channel.toml
+!overrides.toml
+!sysreqs.toml
+!requirements.txt
+**/__pycache__

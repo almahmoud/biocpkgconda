@@ -1,0 +1,175 @@
+name: Builder image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .dockerignore
+      - .github/workflows/builder-image.yml
+      - docker/**
+      - biocpkgconda/**
+      - channel.toml
+      - sysreqs.toml
+      - overrides.toml
+      - requirements.txt
+  workflow_dispatch:
+  # Picks up updates of the base image.
+  schedule:
+    - cron: "43 4 * * 1"
+
+concurrency:
+  group: builder-image
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.config.outputs.version }}
+      base: ${{ steps.base.outputs.base }}
+      image: ${{ steps.config.outputs.image }}
+      platforms: ${{ steps.base.outputs.platforms }}
+      created: ${{ steps.config.outputs.created }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read Bioconductor version
+        id: config
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("channel.toml", "rb"))["bioconductor"]["version"])')
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::invalid Bioconductor version in channel.toml: $version"
+            exit 1
+          fi
+          {
+            echo "version=$version"
+            echo "base_tag=ghcr.io/bioconductor/r-ver:RELEASE_${version/./_}"
+            # GHCR accepts lowercase names only.
+            echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/biocpkgconda-builder"
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+      - name: Resolve base image
+        id: base
+        env:
+          BASE_TAG: ${{ steps.config.outputs.base_tag }}
+        run: |
+          digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$BASE_TAG")
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::$BASE_TAG has no manifest digest"
+            exit 1
+          fi
+          # The tag can move between the two architecture builds, so both build from this digest.
+          base="$BASE_TAG@$digest"
+          docker buildx imagetools inspect --raw "$base" > "$RUNNER_TEMP/base.json"
+          platforms=$(python3 - "$RUNNER_TEMP/base.json" <<'EOF'
+          import json, sys
+          runners = {"amd64": "ubuntu-24.04", "arm64": "ubuntu-24.04-arm"}
+          index = json.load(open(sys.argv[1]))
+          arches = sorted({m["platform"]["architecture"] for m in index.get("manifests", [])
+                           if m.get("platform", {}).get("os") == "linux"} & set(runners))
+          if not arches:
+              sys.exit("the base image provides neither linux/amd64 nor linux/arm64")
+          print(json.dumps([{"arch": arch, "runner": runners[arch]} for arch in arches]))
+          EOF
+          )
+          {
+            echo "base=$base"
+            echo "platforms=$platforms"
+          } >> "$GITHUB_OUTPUT"
+          echo "Base image: $base"
+          echo "Base image platforms: $platforms"
+
+  build:
+    needs: setup
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.platforms) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          pull: true
+          build-args: BASE_IMAGE=${{ needs.setup.outputs.base }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ needs.setup.outputs.created }}
+          tags: ${{ needs.setup.outputs.image }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [setup, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: digest-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the multi-platform image
+        env:
+          IMAGE: ${{ needs.setup.outputs.image }}
+          VERSION: ${{ needs.setup.outputs.version }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          sources=()
+          for digest in *; do
+            if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::unexpected digest file $digest"
+              exit 1
+            fi
+            sources+=("$IMAGE@sha256:$digest")
+          done
+          # GHCR shows a multi-platform image's description from the index annotations.
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" --tag "$IMAGE:sha-${GITHUB_SHA::7}" \
+            --annotation "index:org.opencontainers.image.source=$SOURCE" \
+            --annotation "index:org.opencontainers.image.description=Builds Bioconductor and CRAN conda packages with rattler-build" \
+            --annotation "index:org.opencontainers.image.licenses=MIT" \
+            "${sources[@]}"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
