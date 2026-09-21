@@ -4,8 +4,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import Error, config, metadata, recipe
+from . import Error, config, metadata, recipe, record
 from .naming import parse_target
+from .registry import Registry
 
 
 def _channel(args) -> config.Channel:
@@ -22,6 +23,31 @@ def cmd_recipe(args) -> None:
     print(f"wrote {args.out / 'recipe.yaml'}")
 
 
+def _registry(channel: config.Channel):
+    host, repository = config.registry_reference(channel)
+    return Registry.from_environment(host, repository), config.source_url(repository)
+
+
+def cmd_check_package(args) -> None:
+    target = parse_target(args.target)
+    for path, _ in record.check(args.files, target, metadata.load(_channel(args), args.cache)):
+        print(f"{path.name} is a valid build of {args.target}")
+
+
+def cmd_publish(args) -> None:
+    channel = _channel(args)
+    registry, source = _registry(channel)
+    target = parse_target(args.target)
+    record.publish(args.files, target, registry, metadata.load(channel, args.cache), source)
+
+
+def cmd_fail(args) -> None:
+    channel = _channel(args)
+    registry, source = _registry(channel)
+    target = parse_target(args.target)
+    record.fail(target, args.run_url, registry, metadata.load(channel, args.cache), source)
+
+
 def parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, default=Path("."), metavar="DIR",
@@ -36,6 +62,22 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--target", required=True, help="<subdir>/<Package>, e.g. linux-64/DESeq2")
     command.add_argument("--out", type=Path, required=True, metavar="DIR")
     command.set_defaults(func=cmd_recipe)
+
+    command = commands.add_parser("check-package", parents=[common],
+                                  help="check that built .conda files are the package and install only its files")
+    command.add_argument("--target", required=True, help="<subdir>/<Package> the files were built for")
+    command.add_argument("files", nargs="+", type=Path, metavar="FILE")
+    command.set_defaults(func=cmd_check_package)
+
+    command = commands.add_parser("publish", parents=[common], help="push the built .conda file of a package")
+    command.add_argument("--target", required=True, help="<subdir>/<Package> the files were built for")
+    command.add_argument("files", nargs="+", type=Path, metavar="FILE")
+    command.set_defaults(func=cmd_publish)
+
+    command = commands.add_parser("fail", parents=[common], help="record a failed build of a package")
+    command.add_argument("--target", required=True, help="<subdir>/<Package>")
+    command.add_argument("--run-url", required=True, help="URL of the failed workflow run")
+    command.set_defaults(func=cmd_fail)
 
     return root
 

@@ -241,3 +241,13 @@ def load_overrides(path: Path) -> dict[str, Override]:
         overrides[name] = Override(_specs(table, "build", where), _specs(table, "host", where),
                                    _specs(table, "run", where), skip)
     return overrides
+
+
+# Shown on the registry package page.
+REGISTRY_DESCRIPTION = "Packages and repodata of the Bioconductor conda channel"
+
+
+def source_url(repository: str, environ=os.environ) -> str:
+    """URL of the repository that builds the channel, for org.opencontainers.image.source."""
+    server = environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+    return f"{server}/{environ.get('GITHUB_REPOSITORY') or repository}"
