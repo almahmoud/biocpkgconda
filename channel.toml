@@ -1,0 +1,36 @@
+[channel]
+url = "https://conda.biocpkgcontainers.org"
+# Channels rattler-build searches after this one when building and testing packages.
+upstream = ["conda-forge"]
+# GHCR repository holding every package, repodata and failure marker.
+# Defaults to ghcr.io/<owner>/<repository> of the workflow when unset.
+# registry = "ghcr.io/almahmoud/biocpkgconda"
+
+[bioconductor]
+version = "3.23"
+repositories = ["bioc", "data/annotation", "data/experiment", "workflows"]
+
+[r]
+# Must match the R version Bioconductor pairs with the release above.
+version = "4.6"
+
+[platforms]  # conda subdir -> GitHub runner
+# noarch shares the runner of one other platform and builds against its packages.
+noarch = "ubuntu-24.04"
+linux-64 = "ubuntu-24.04"
+osx-arm64 = "macos-15"
+# linux-aarch64 = "ubuntu-24.04-arm"
+
+[build]
+shard_size = 100  # targets per build workflow run, at most 120
+max_attempts = 2  # builds of a package version before it counts as failed
+# conda-forge-pinning-feedstock commit providing compiler and stdlib versions.
+pinning = "b7dd4c111e066f157c7fd6f98ec5e1760534db94"
+
+[build.rattler-build]
+version = "0.76.1"
+
+[build.rattler-build.sha256]
+x86_64-unknown-linux-musl = "38359a75f4a880442432923d6e984d349bb4134d330edd712eb1cfb2fa80581a"
+aarch64-unknown-linux-musl = "8f5ae1c3faf08c50007bbfe896cee84dcf5f4b8e8cc3a5fa400695c82abed2ae"
+aarch64-apple-darwin = "3809453e95380d598f2c4264480396029781fc64a9b940f3e19f84485fad75bf"
