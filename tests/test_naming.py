@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from biocpkgconda import naming
+from biocpkgconda import Error, naming
 from biocpkgconda.naming import Dependency
 
 VECTORS = json.loads((Path(__file__).parent / "tag_vectors.json").read_text())
@@ -88,3 +88,13 @@ class TagsTest(unittest.TestCase):
         for subdir, name, version, tag in VECTORS["failure"]:
             self.assertEqual(naming.failure_tag(subdir, name, version), tag)
             self.assertLessEqual(len(tag), 128)
+
+
+class TargetTest(unittest.TestCase):
+    def test_parse_target(self):
+        self.assertEqual(naming.parse_target("linux-64/DESeq2"), ("linux-64", "DESeq2"))
+        self.assertEqual(naming.parse_target("noarch/BSgenome.Hsapiens.UCSC.hg38"),
+                         ("noarch", "BSgenome.Hsapiens.UCSC.hg38"))
+        for target in ("linux-64/", "DESeq2", "linux-32/DESeq2", "noarch/../x", "noarch/2fast", "noarch/a b"):
+            with self.assertRaises(Error, msg=target):
+                naming.parse_target(target)

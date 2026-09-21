@@ -1,0 +1,126 @@
+# conda-forge packages added to a recipe when `pattern`, a Python regular
+# expression, matches the SystemRequirements field of the package DESCRIPTION.
+# `build`, `host` and `run` name the recipe sections; `platforms` limits a rule
+# to the listed conda subdirs.
+
+[[rule]]
+pattern = '(?i)\bgsl\b|gnu scientific library'
+host = ["gsl"]
+
+[[rule]]
+pattern = '(?i)libxml|\bxml2\b'
+host = ["libxml2-devel"]
+
+[[rule]]
+pattern = '(?i)libcurl|\bcurl\b'
+host = ["libcurl"]
+
+[[rule]]
+pattern = '(?i)openssl|libssl'
+host = ["openssl"]
+
+[[rule]]
+pattern = '(?i)zlib|\blibz\b'
+host = ["zlib"]
+
+[[rule]]
+pattern = '(?i)bzip2|libbz2'
+host = ["bzip2"]
+
+[[rule]]
+pattern = '(?i)lzma|\bxz\b'
+host = ["xz"]
+
+[[rule]]
+pattern = '(?i)zstd'
+host = ["zstd"]
+
+[[rule]]
+pattern = '(?i)hdf5'
+host = ["hdf5"]
+
+[[rule]]
+pattern = '(?i)fftw'
+host = ["fftw"]
+
+[[rule]]
+pattern = '(?i)\bglpk\b'
+host = ["glpk"]
+
+[[rule]]
+pattern = '(?i)libgmp|\bgmp\b'
+host = ["gmp"]
+
+[[rule]]
+pattern = '(?i)mpfr'
+host = ["mpfr"]
+
+[[rule]]
+pattern = '(?i)netcdf'
+host = ["libnetcdf"]
+
+[[rule]]
+pattern = '(?i)graphviz'
+host = ["graphviz"]
+
+[[rule]]
+pattern = '(?i)libsbml'
+host = ["libsbml"]
+
+# librsvg-2.0.pc requires the pkg-config files of these packages.
+[[rule]]
+pattern = '(?i)librsvg'
+host = ["librsvg", "gdk-pixbuf", "glib", "harfbuzz", "libxml2-devel"]
+
+[[rule]]
+pattern = '(?i)\bjags\b'
+host = ["jags 4.*"]
+run = ["jags 4.*"]
+
+# cairo.pc requires freetype2 and the X11 protocol headers, which ship separately.
+[[rule]]
+pattern = '(?i)\bcairo\b|librsvg'
+host = ["cairo", "freetype", "xorg-kbproto", "xorg-renderproto", "xorg-xextproto", "xorg-xproto"]
+
+[[rule]]
+pattern = '(?i)freetype'
+host = ["freetype"]
+
+# fontconfig.pc requires the pkg-config files of freetype and expat.
+[[rule]]
+pattern = '(?i)fontconfig'
+host = ["fontconfig", "freetype", "expat"]
+
+[[rule]]
+pattern = '(?i)libpng'
+host = ["libpng"]
+
+[[rule]]
+pattern = '(?i)jpeg'
+host = ["libjpeg-turbo"]
+
+[[rule]]
+pattern = '(?i)libtiff|\btiff\b'
+host = ["libtiff"]
+
+[[rule]]
+pattern = '(?i)\bperl\b'
+build = ["perl"]
+run = ["perl"]
+
+[[rule]]
+pattern = '(?i)\bpython\b'
+run = ["python"]
+
+[[rule]]
+pattern = '(?i)\bjava\b|\bjdk\b|\bjre\b'
+run = ["openjdk"]
+
+[[rule]]
+pattern = '(?i)\bcmake\b'
+build = ["cmake"]
+
+[[rule]]
+pattern = '(?i)openmp'
+host = ["llvm-openmp"]
+platforms = ["osx-arm64", "osx-64"]

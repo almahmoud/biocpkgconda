@@ -1,0 +1,9 @@
+# Per-package recipe fixes, keyed by R package name.
+#   build, host, run  conda-forge match specs added to that recipe section
+#   skip              reason the package is not built
+#
+# [package.ExamplePkg]
+# host = ["gsl", "libxml2 >=2.12"]
+#
+# [package."BSgenome.Example.UCSC.xx1"]
+# skip = "source tarball exceeds the runner disk"

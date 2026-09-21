@@ -4,6 +4,8 @@ import hashlib
 import re
 from dataclasses import dataclass
 
+from . import Error
+
 SUBDIRS = ("noarch", "linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64")
 
 BASE_R = frozenset({
@@ -14,6 +16,7 @@ BASE_R = frozenset({
 _DEPENDENCY = re.compile(r"([A-Za-z][A-Za-z0-9.]*)\s*(?:\(\s*(>=|<=|==|>|<)\s*(\d+(?:[.-]\d+)*)\s*\))?")
 _FILENAME = re.compile(r"[A-Za-z0-9._+!-]{1,255}")
 _EXTENSIONS = (".conda", ".tar.bz2")
+_TARGET = re.compile("(" + "|".join(map(re.escape, SUBDIRS)) + r")/([A-Za-z][A-Za-z0-9.]*)")
 
 
 def bioc_name(package: str) -> str:
@@ -70,6 +73,14 @@ def r_base_pin(r_version: str) -> str:
     """The run requirement conda-forge R packages carry, e.g. ``r-base >=4.5,<4.6.0a0``."""
     major, minor = version_key(r_version)[:2]
     return f"r-base >={major}.{minor},<{major}.{minor + 1}.0a0"
+
+
+def parse_target(target: str) -> tuple[str, str]:
+    """Split ``<subdir>/<Package>`` into its parts."""
+    match = _TARGET.fullmatch(target)
+    if not match:
+        raise Error(f"invalid target {target!r}; expected <subdir>/<Package>, e.g. linux-64/DESeq2")
+    return match.group(1), match.group(2)
 
 
 def split_filename(filename: str) -> tuple[str, str, str] | None:

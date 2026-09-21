@@ -1,4 +1,4 @@
-"""Load and validate channel.toml."""
+"""Load and validate channel.toml, overrides.toml and sysreqs.toml."""
 
 import os
 import re
@@ -23,6 +23,7 @@ _RUNNER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _CHANNEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/:-]*")
 # Anaconda's own repository, which needs a paid license at organizations over 200 people.
 _ANACONDA = re.compile(r"(?i)^(defaults|anaconda|main|r|msys2|pkgs/\w+)$|repo\.anaconda\.|conda\.anaconda\.org/(anaconda|main|r|msys2)(/|$)")
+_MATCH_SPEC = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._+-]*( [A-Za-z0-9.*_,<>=!|+-]+){0,2}")
 
 
 @dataclass(frozen=True)
@@ -72,12 +73,15 @@ def _match(pattern: re.Pattern, value: str, what: str) -> str:
     return value
 
 
-def load_channel(path: Path) -> Channel:
+def _read(path: Path) -> dict:
     try:
-        data = tomllib.loads(Path(path).read_text())
+        return tomllib.loads(Path(path).read_text())
     except (OSError, tomllib.TOMLDecodeError) as err:
         raise Error(f"cannot read {path}: {err}") from None
 
+
+def load_channel(path: Path) -> Channel:
+    data = _read(path)
     channel = _value(data, "channel", dict, str(path))
     bioc = _value(data, "bioconductor", dict, str(path))
     r = _value(data, "r", dict, str(path))
@@ -159,3 +163,81 @@ def registry_reference(channel: Channel, environ=os.environ) -> tuple[str, str]:
         raise Error("set channel.registry in channel.toml, or GITHUB_REPOSITORY in the environment")
     # GHCR accepts lowercase names only.
     return _split_registry(f"ghcr.io/{repository.lower()}")
+
+
+@dataclass(frozen=True)
+class Rule:
+    """A sysreqs.toml rule."""
+
+    pattern: re.Pattern
+    build: tuple[str, ...] = ()
+    host: tuple[str, ...] = ()
+    run: tuple[str, ...] = ()
+    platforms: tuple[str, ...] | None = None
+
+    def applies(self, system_requirements: str, subdir: str) -> bool:
+        if self.platforms is not None and subdir not in self.platforms:
+            return False
+        return bool(self.pattern.search(system_requirements))
+
+
+@dataclass(frozen=True)
+class Override:
+    """An overrides.toml entry."""
+
+    build: tuple[str, ...] = ()
+    host: tuple[str, ...] = ()
+    run: tuple[str, ...] = ()
+    skip: str | None = None
+
+
+def _specs(table: dict, key: str, where: str) -> tuple[str, ...]:
+    value = table.get(key, [])
+    if not isinstance(value, list) or not all(isinstance(v, str) and _MATCH_SPEC.fullmatch(v) for v in value):
+        raise Error(f"{where}.{key} must be a list of conda match specs such as \"gsl\" or \"libxml2 >=2.12\"")
+    return tuple(value)
+
+
+def _check_keys(table: dict, allowed: set[str], where: str) -> None:
+    unknown = sorted(set(table) - allowed)
+    if unknown:
+        raise Error(f"{where}: unknown keys {', '.join(unknown)}")
+
+
+def load_sysreqs(path: Path) -> tuple[Rule, ...]:
+    data = _read(path)
+    _check_keys(data, {"rule"}, Path(path).name)
+    rules = []
+    for number, table in enumerate(data.get("rule", []), 1):
+        where = f"{Path(path).name} rule {number}"
+        _check_keys(table, {"pattern", "build", "host", "run", "platforms"}, where)
+        try:
+            pattern = re.compile(_value(table, "pattern", str, where))
+        except re.error as err:
+            raise Error(f"{where}: invalid pattern: {err}") from None
+        platforms = table.get("platforms")
+        if platforms is not None:
+            platforms = _strings(table, "platforms", where)
+            unknown = sorted(set(platforms) - set(SUBDIRS))
+            if unknown:
+                raise Error(f"{where}: unknown platforms {', '.join(unknown)}")
+        rules.append(Rule(pattern, _specs(table, "build", where), _specs(table, "host", where),
+                          _specs(table, "run", where), platforms))
+    return tuple(rules)
+
+
+def load_overrides(path: Path) -> dict[str, Override]:
+    data = _read(path)
+    _check_keys(data, {"package"}, Path(path).name)
+    overrides = {}
+    for name, table in data.get("package", {}).items():
+        where = f"package.{name}"
+        if not isinstance(table, dict):
+            raise Error(f"{where} must be a table")
+        _check_keys(table, {"build", "host", "run", "skip"}, where)
+        skip = _value(table, "skip", str, where, required=False)
+        if skip is not None and not skip.strip():
+            raise Error(f"{where}.skip must give a reason")
+        overrides[name] = Override(_specs(table, "build", where), _specs(table, "host", where),
+                                   _specs(table, "run", where), skip)
+    return overrides
