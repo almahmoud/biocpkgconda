@@ -19,6 +19,14 @@ sleep = time.sleep
 _NETWORK_ERRORS = (urllib.error.URLError, OSError, http.client.HTTPException)
 
 
+class StatusError(Error):
+    """A request that the server answered with a non-retryable HTTP error."""
+
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 @dataclass(frozen=True)
 class Response:
     status: int
@@ -62,18 +70,18 @@ def request(url: str, *, headers: dict | None = None, secret_headers: dict | Non
     raise Error(f"{method} {url} failed after {RETRIES + 1} attempts: {reason}")
 
 
-def open_stream(url: str):
+def open_stream(url: str, *, secret_headers: dict | None = None):
     """Open a GET response for reading in chunks. Connecting is retried; reading is not."""
     reason = ""
     for attempt in range(RETRIES + 1):
         if attempt:
             sleep(2 ** attempt)
         try:
-            return _open(url, {}, {}, "GET")
+            return _open(url, {}, secret_headers or {}, "GET")
         except urllib.error.HTTPError as err:
             err.close()
             if not _retryable(err.code):
-                raise Error(f"GET {url} returned HTTP {err.code}") from None
+                raise StatusError(f"GET {url} returned HTTP {err.code}", err.code) from None
             reason = f"HTTP {err.code}"
         except _NETWORK_ERRORS as err:
             reason = str(getattr(err, "reason", err))

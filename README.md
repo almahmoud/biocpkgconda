@@ -130,13 +130,13 @@ docker run --rm --init --platform linux/amd64 --user "$(id -u):$(id -g)" --cap-d
   python -m biocpkgconda recipe --target linux-64/DESeq2 --out work/recipe
 
 docker run --rm --init --platform linux/amd64 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
-  -v "$PWD:/work:ro" -v "$PWD/work:/work/work" -w /work \
+  -e GITHUB_REPOSITORY=almahmoud/biocpkgconda -v "$PWD:/work:ro" -v "$PWD/work:/work/work" -w /work \
   ghcr.io/almahmoud/biocpkgconda-builder:3.23 \
   python -m biocpkgconda build --recipe work/recipe --output-dir work/out \
     --variant-config /opt/conda-build-config/conda_build_config.yaml
 ```
 
-The build runs the package's own `configure` and `Makevars`, so the container sees the checkout read-only and writes to `work/` only. The package is written under `work/out/`. The image is multi-arch, and `--platform linux/amd64` keeps an arm64 host from building for `linux-aarch64`, a subdir the channel neither publishes nor resolves dependencies for.
+The build runs the package's own `configure` and `Makevars`, so the container sees the checkout read-only and writes to `work/` only. The package is written under `work/out/`. The build reads the channel's packages anonymously from the GHCR repository of `GITHUB_REPOSITORY` (or `channel.registry` in `channel.toml`) through a mirror on 127.0.0.1. The image is multi-arch, and `--platform linux/amd64` keeps an arm64 host from building for `linux-aarch64`, a subdir the channel neither publishes nor resolves dependencies for.
 
 ## Repository layout
 

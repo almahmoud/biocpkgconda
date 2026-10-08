@@ -132,3 +132,6 @@ class FakeRegistry:
 
     def blob(self, digest):
         return self.blobs[digest]
+
+    def open_blob(self, digest):
+        return io.BytesIO(self.blobs[digest])

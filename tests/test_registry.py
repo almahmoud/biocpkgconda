@@ -1,9 +1,11 @@
 import base64
 import hashlib
+import io
 import json
 import unittest
+from unittest import mock
 
-from biocpkgconda import Error
+from biocpkgconda import Error, net
 from biocpkgconda.net import Response
 from biocpkgconda.registry import Registry, layer
 
@@ -106,6 +108,22 @@ class ApiTest(unittest.TestCase):
             registry.blob(wrong)
         with self.assertRaises(Error):
             registry.blob("md5:abc")
+
+    def test_open_blob_refreshes_a_rejected_token(self):
+        digest = "sha256:" + "a" * 64
+        transport = Transport({})
+        registry = Registry("ghcr.io", "example/channel", transport=transport)
+        stream = io.BytesIO(b"data")
+        with mock.patch.object(net, "open_stream", side_effect=[net.StatusError("denied", 403), stream]) as opened:
+            self.assertIs(registry.open_blob(digest), stream)
+        self.assertEqual([call.kwargs["secret_headers"] for call in opened.call_args_list],
+                         [{"Authorization": "Bearer t1"}, {"Authorization": "Bearer t2"}])
+        self.assertEqual(opened.call_args.args[0], f"{BASE}/blobs/{digest}")
+        with mock.patch.object(net, "open_stream", side_effect=net.StatusError("missing", 404)):
+            with self.assertRaisesRegex(Error, "missing"):
+                registry.open_blob(digest)
+        with self.assertRaises(Error):
+            registry.open_blob("md5:abc")
 
     def test_layer(self):
         manifest = {"layers": [{"mediaType": "a", "digest": "1"}, {"mediaType": "b", "digest": "2"}]}

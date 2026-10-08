@@ -111,6 +111,20 @@ class Registry:
             raise Error(f"blob {digest} of {self.reference} does not match its digest")
         return response.body
 
+    def open_blob(self, digest: str):
+        """Open a blob for reading in chunks. The reader checks its digest."""
+        if not _DIGEST.fullmatch(digest):
+            raise Error(f"unsupported digest {digest!r}")
+        url = self._url(f"blobs/{digest}")
+        token = self._current_token()
+        try:
+            return net.open_stream(url, secret_headers={"Authorization": f"Bearer {token}"})
+        except net.StatusError as err:
+            if err.status not in (401, 403):
+                raise
+        token = self._current_token(stale=token)
+        return net.open_stream(url, secret_headers={"Authorization": f"Bearer {token}"})
+
 
 def layer(manifest: dict, *media_types: str) -> dict | None:
     """The first layer with one of the given media types."""

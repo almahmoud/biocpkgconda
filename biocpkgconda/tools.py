@@ -4,11 +4,13 @@ import hashlib
 import platform
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
-from . import Error
+from . import Error, mirror
 from .config import Channel
 from .net import fetch
+from .registry import Registry
 
 RATTLER_BUILD = "https://github.com/prefix-dev/rattler-build/releases/download/v{version}/rattler-build-{target}"
 PINNING = ("https://raw.githubusercontent.com/conda-forge/conda-forge-pinning-feedstock/{commit}"
@@ -62,7 +64,7 @@ def fetch_pinning(channel: Channel, dest: Path) -> Path:
 
 
 def build_command(channel: Channel, recipe: Path, output_dir: Path, variant_config: Path,
-                  markdown_summary: Path | None = None) -> list[str]:
+                  markdown_summary: Path | None = None, config_file: Path | None = None) -> list[str]:
     command = ["rattler-build", "build", "--recipe", str(recipe), "--output-dir", str(output_dir),
                "-m", str(variant_config), "--variant", f"r_base={channel.r_version}", "-c", channel.url]
     for upstream in channel.upstream:
@@ -70,14 +72,20 @@ def build_command(channel: Channel, recipe: Path, output_dir: Path, variant_conf
     command += ["--channel-priority", "strict", "--package-format", "conda"]
     if markdown_summary:
         command += ["--markdown-summary", str(markdown_summary)]
+    if config_file:
+        command += ["--config-file", str(config_file)]
     return command
 
 
-def build(channel: Channel, recipe: Path, output_dir: Path, variant_config: Path,
+def build(channel: Channel, registry: Registry, recipe: Path, output_dir: Path, variant_config: Path,
           markdown_summary: Path | None = None, run=subprocess.run) -> int:
-    command = build_command(channel, recipe, output_dir, variant_config, markdown_summary)
-    print("+ " + " ".join(command), flush=True)
-    try:
-        return run(command, check=False).returncode
-    except FileNotFoundError:
-        raise Error("rattler-build is not installed or not on PATH") from None
+    """Run rattler-build, fetching packages of the channel from ``registry`` through a local mirror."""
+    with mirror.serve(registry, channel.subdirs) as url, tempfile.TemporaryDirectory() as tmp:
+        config_file = Path(tmp) / "config.toml"
+        config_file.write_text(mirror.rattler_config(channel.url, url))
+        command = build_command(channel, recipe, output_dir, variant_config, markdown_summary, config_file)
+        print("+ " + " ".join(command), flush=True)
+        try:
+            return run(command, check=False).returncode
+        except FileNotFoundError:
+            raise Error("rattler-build is not installed or not on PATH") from None

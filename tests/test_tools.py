@@ -8,7 +8,7 @@ from unittest import mock
 
 from biocpkgconda import Error, tools
 
-from .support import channel
+from .support import FakeRegistry, channel
 
 
 class RattlerBuildTest(unittest.TestCase):
@@ -65,9 +65,24 @@ class BuildTest(unittest.TestCase):
             "-c", "https://conda.biocpkgcontainers.org", "-c", "conda-forge",
             "--channel-priority", "strict", "--package-format", "conda",
             "--markdown-summary", "/tmp/summary.md"])
+        command = tools.build_command(channel(), Path("r"), Path("o"), Path("c"), config_file=Path("/tmp/c.toml"))
+        self.assertEqual(command[-2:], ["--config-file", "/tmp/c.toml"])
 
     def test_returns_exit_code(self):
         run = mock.Mock(return_value=mock.Mock(returncode=3))
         with redirect_stdout(io.StringIO()):
-            self.assertEqual(tools.build(channel(), Path("r"), Path("o"), Path("c"), run=run), 3)
+            self.assertEqual(tools.build(channel(), FakeRegistry(), Path("r"), Path("o"), Path("c"), run=run), 3)
         self.assertEqual(run.call_args.args[0][:2], ["rattler-build", "build"])
+
+    def test_fetches_the_channel_from_a_local_mirror(self):
+        seen = {}
+
+        def run(command, check):
+            config_file = Path(command[command.index("--config-file") + 1])
+            seen["config"] = config_file.read_text()
+            return mock.Mock(returncode=0)
+
+        with redirect_stdout(io.StringIO()):
+            tools.build(channel(), FakeRegistry(), Path("r"), Path("o"), Path("c"), run=run)
+        self.assertRegex(seen["config"],
+                         r'^\[mirrors\]\n"https://conda\.biocpkgcontainers\.org/" = \["http://127\.0\.0\.1:\d+/"\]\n$')

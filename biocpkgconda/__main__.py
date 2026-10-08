@@ -83,7 +83,10 @@ def cmd_fetch_pinning(args) -> None:
 
 
 def cmd_build(args) -> int:
-    return tools.build(_channel(args), args.recipe, args.output_dir, args.variant_config, args.markdown_summary)
+    channel = _channel(args)
+    # Builds run package scripts, so the mirror reads the public channel without credentials.
+    registry = Registry(*config.registry_reference(channel))
+    return tools.build(channel, registry, args.recipe, args.output_dir, args.variant_config, args.markdown_summary)
 
 
 def cmd_builder_image(args) -> None:

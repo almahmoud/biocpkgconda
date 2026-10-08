@@ -110,7 +110,7 @@ jobs:
           if [ "$RUNNER_OS" = Linux ]; then
             status=0
             docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
-              -v "$PWD:/work:ro" -v "$PWD/work:/work/work" -w /work "$BUILDER_IMAGE" \
+              -e GITHUB_REPOSITORY -v "$PWD:/work:ro" -v "$PWD/work:/work/work" -w /work "$BUILDER_IMAGE" \
               python -m biocpkgconda build --recipe work/recipe --output-dir work/out \
                 --variant-config /opt/conda-build-config/conda_build_config.yaml \
                 --markdown-summary work/summary.md || status=$?

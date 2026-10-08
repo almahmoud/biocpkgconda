@@ -55,8 +55,14 @@ class RequestTest(unittest.TestCase):
             with net.open_stream("https://example.org/x") as stream:
                 self.assertEqual(stream.read(), b"data")
         with mock.patch.object(net.urllib.request, "urlopen", side_effect=[http_error(404)]):
-            with self.assertRaisesRegex(Error, "HTTP 404"):
+            with self.assertRaisesRegex(Error, "HTTP 404") as raised:
                 net.open_stream("https://example.org/x")
+        self.assertEqual(raised.exception.status, 404)
+
+    def test_open_stream_secret_headers_are_not_redirected(self):
+        with mock.patch.object(net.urllib.request, "urlopen", return_value=FakeResponse()) as urlopen:
+            net.open_stream("https://example.org/x", secret_headers={"Authorization": "Bearer t"})
+        self.assertEqual(urlopen.call_args.args[0].unredirected_hdrs, {"Authorization": "Bearer t"})
 
 
 class FetchTest(unittest.TestCase):
