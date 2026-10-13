@@ -3,9 +3,11 @@ ARG BASE_IMAGE=ghcr.io/bioconductor/r-ver:RELEASE_3_23
 FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
 
+# Configure scripts that find libsbml5-dev of the base image add -I/usr/include ahead of the conda sysroot.
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       bzip2 ca-certificates curl git python3 python3-venv xz-utils zstd \
+ && apt-get purge -y libsbml5-dev \
  && rm -rf /var/lib/apt/lists/*
 
 ENV PATH=/opt/venv/bin:$PATH \
