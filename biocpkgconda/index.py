@@ -11,7 +11,7 @@ from pathlib import Path
 from . import Error
 from .config import REGISTRY_DESCRIPTION
 from .naming import failure_tag, package_tag, repodata_tag, split_filename
-from .record import MAX_INDEX_SIZE, attempts, index_record, oras_push, parse_json
+from .record import MAX_INDEX_SIZE, STAGE, STAGES, attempts, index_record, oras_push, parse_json
 from .registry import INDEX, PACKAGE_V1, PACKAGE_V2, REPODATA, REPODATA_ZST, Registry, layer
 
 WORKERS = 8
@@ -135,13 +135,27 @@ def _failure(registry: Registry, tag: str) -> dict | None:
     if not all(entry.values()) or failure_tag(entry["subdir"], entry["name"], entry["version"]) != tag:
         _warn(f"{tag}: failure marker without matching subdir, name and version annotations")
         return None
-    return entry | {"attempts": attempts(manifest), "run_url": annotations.get("org.biocpkgconda.run-url", "")}
+    stage = annotations.get(STAGE, "")
+    return entry | {"attempts": attempts(manifest), "run_url": annotations.get("org.biocpkgconda.run-url", ""),
+                    "stage": stage if stage in STAGES else ""}
 
 
 def failures(registry: Registry, tags: list[str]) -> list[dict]:
     with concurrent.futures.ThreadPoolExecutor(WORKERS) as pool:
         markers = pool.map(lambda tag: _failure(registry, tag), sorted(t for t in tags if t.startswith("failed_")))
         return [marker for marker in markers if marker]
+
+
+def _builds(repodata: dict) -> list[dict]:
+    """Name, version and depends of each repodata record, as the planner reads them."""
+    return [{"name": r.get("name"), "version": r.get("version"), "depends": r.get("depends", [])}
+            for key in ("packages", "packages.conda") for r in repodata[key].values() if isinstance(r, dict)]
+
+
+def channel_state(registry: Registry, subdirs: tuple[str, ...]) -> dict:
+    """The channel state from the published repodata and failure markers, without reconciling or pushing."""
+    return {"subdirs": {subdir: _builds(load_repodata(registry, subdir)[0]) for subdir in subdirs},
+            "failures": failures(registry, registry.list_tags())}
 
 
 def index(registry: Registry, subdirs: tuple[str, ...], source: str, run=subprocess.run) -> tuple[dict, int]:
@@ -155,7 +169,6 @@ def index(registry: Registry, subdirs: tuple[str, ...], source: str, run=subproc
         if changed:
             push_repodata(registry, subdir, data, source, run)
         print(f"{subdir}: {len(records)} packages, {added} added, repodata {'pushed' if changed else 'unchanged'}")
-        state["subdirs"][subdir] = [{"name": r["name"], "version": r["version"], "depends": r.get("depends", [])}
-                                    for r in records]
+        state["subdirs"][subdir] = _builds(repodata)
         total += added
     return state, total

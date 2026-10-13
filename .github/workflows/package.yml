@@ -27,6 +27,7 @@ jobs:
       sha256: ${{ steps.package.outputs.sha256 }}
       filename: ${{ steps.package.outputs.filename }}
       failed: ${{ steps.recipe.outcome == 'failure' || steps.build.outcome == 'failure' || steps.package.outcome == 'failure' }}
+      stage: ${{ steps.recipe.outcome == 'failure' && 'recipe' || steps.build.outcome == 'failure' && 'build' || steps.package.outcome == 'failure' && 'package' || '' }}
     env:
       TARGET: ${{ inputs.target }}
     steps:
@@ -170,6 +171,7 @@ jobs:
       packages: write
     outputs:
       rejected: ${{ steps.verify.outcome == 'failure' || steps.check.outcome == 'failure' }}
+      stage: ${{ steps.verify.outcome == 'failure' && 'verify' || steps.check.outcome == 'failure' && 'check' || '' }}
     env:
       TARGET: ${{ inputs.target }}
     steps:
@@ -254,4 +256,11 @@ jobs:
           TARGET: ${{ inputs.target }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: python -m biocpkgconda fail --target="$TARGET" --run-url="$RUN_URL" --cache "$RUNNER_TEMP/cache"
+          STAGE: ${{ needs.build.outputs.stage || needs.publish.outputs.stage }}
+        run: |
+          pattern='^(recipe|build|package|verify|check)$'
+          if [[ ! "$STAGE" =~ $pattern ]]; then
+            echo "::error::the build and publish jobs reported no valid failed step"
+            exit 1
+          fi
+          python -m biocpkgconda fail --target="$TARGET" --run-url="$RUN_URL" --stage="$STAGE" --cache "$RUNNER_TEMP/cache"

@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import Error, actions, config, index, metadata, plan, recipe, record, tools
+from . import Error, actions, config, index, metadata, plan, recipe, record, status, tools
 from .naming import parse_target
 from .registry import Registry
 
@@ -46,7 +46,7 @@ def cmd_fail(args) -> None:
     channel = _channel(args)
     registry, source = _registry(channel)
     target = parse_target(args.target)
-    record.fail(target, args.run_url, registry, metadata.load(channel, args.cache), source)
+    record.fail(target, args.run_url, args.stage, registry, metadata.load(channel, args.cache), source)
 
 
 def cmd_index(args) -> None:
@@ -57,21 +57,40 @@ def cmd_index(args) -> None:
     actions.set_output("added", str(added))
 
 
-def cmd_plan(args) -> None:
-    channel = _channel(args)
-    overrides = config.load_overrides(args.config / "overrides.toml")
+def _read_json(path: Path):
     try:
-        state = json.loads(args.state.read_text())
+        return json.loads(path.read_text())
     except (OSError, ValueError) as err:
-        raise Error(f"cannot read {args.state}: {err}") from None
+        raise Error(f"cannot read {path}: {err}") from None
+
+
+def _planner(args, channel: config.Channel, state: dict, retry_failed: bool = False) -> plan.Planner:
+    overrides = config.load_overrides(args.config / "overrides.toml")
     sources = metadata.load(channel, args.cache)
     conda_forge = metadata.conda_forge_r(channel, args.cache)
-    planner = plan.Planner(channel, sources, conda_forge, overrides, state, args.retry_failed)
+    return plan.Planner(channel, sources, conda_forge, overrides, state, retry_failed)
+
+
+def cmd_plan(args) -> None:
+    channel = _channel(args)
+    planner = _planner(args, channel, _read_json(args.state), args.retry_failed)
     results = planner.plan()
     document = plan.ready(channel, results)
     args.out.write_text(json.dumps(document, indent=1) + "\n")
     args.summary.write_text(plan.summary(channel, planner, results))
     print(f"{len(document['ready'])} targets ready")
+
+
+def cmd_status(args) -> None:
+    channel = _channel(args)
+    if args.state:
+        state = _read_json(args.state)
+    else:
+        # The channel is public, so reading it needs no registry credentials.
+        state = index.channel_state(Registry(*config.registry_reference(channel)), channel.subdirs)
+    document = status.document(_planner(args, channel, state), state.get("failures", []))
+    args.out.write_text(status.serialize(document))
+    print(f"wrote {args.out} with {len(document['packages'])} packages")
 
 
 def cmd_install_rattler_build(args) -> None:
@@ -106,11 +125,7 @@ def cmd_matrix(args) -> None:
 
 
 def cmd_dispatch(args) -> None:
-    try:
-        document = json.loads(args.plan.read_text())
-    except (OSError, ValueError) as err:
-        raise Error(f"cannot read {args.plan}: {err}") from None
-    actions.dispatch(_channel(args), document, args.dry_run)
+    actions.dispatch(_channel(args), _read_json(args.plan), args.dry_run)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -142,6 +157,7 @@ def parser() -> argparse.ArgumentParser:
     command = commands.add_parser("fail", parents=[common], help="record a failed build of a package")
     command.add_argument("--target", required=True, help="<subdir>/<Package>")
     command.add_argument("--run-url", required=True, help="URL of the failed workflow run")
+    command.add_argument("--stage", required=True, choices=record.STAGES, help="step of the build that failed")
     command.set_defaults(func=cmd_fail)
 
     command = commands.add_parser("index", parents=[common], help="rebuild repodata from the registry")
@@ -154,6 +170,13 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--summary", type=Path, required=True, metavar="FILE", help="write a Markdown summary here")
     command.add_argument("--retry-failed", action="store_true", help="ignore recorded build failures")
     command.set_defaults(func=cmd_plan)
+
+    command = commands.add_parser("status", parents=[common],
+                                  help="write status.json: install and build status of every package")
+    command.add_argument("--out", type=Path, required=True, metavar="FILE", help="write status.json here")
+    command.add_argument("--state", type=Path, metavar="FILE",
+                         help="output of the index command (default: read the registry without pushing)")
+    command.set_defaults(func=cmd_status)
 
     command = commands.add_parser("install-rattler-build", parents=[common],
                                   help="download the pinned rattler-build and verify its checksum")

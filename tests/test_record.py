@@ -234,10 +234,10 @@ class OrasTest(unittest.TestCase):
 
 
 class FailTest(unittest.TestCase):
-    def fail(self, registry):
+    def fail(self, registry, stage="build"):
         oras = Oras()
         with mock.patch("sys.stdout"):
-            count = record.fail(("linux-64", "DESeq2"), "https://github.com/example/channel/actions/runs/1",
+            count = record.fail(("linux-64", "DESeq2"), "https://github.com/example/channel/actions/runs/1", stage,
                                 registry, sources(), "https://github.com/example/channel", run=oras)
         return count, oras.calls
 
@@ -248,19 +248,35 @@ class FailTest(unittest.TestCase):
         self.assertEqual(command[5], "failure.json:application/vnd.biocpkgconda.failure.v1+json")
         self.assertEqual(json.loads(files["failure.json"]), {
             "name": "bioconductor-deseq2", "version": "1.52.0", "subdir": "linux-64", "attempts": 1,
-            "run_url": "https://github.com/example/channel/actions/runs/1"})
+            "run_url": "https://github.com/example/channel/actions/runs/1", "stage": "build"})
         annotations = json.loads(files["annotations.json"])["$manifest"]
         self.assertEqual(annotations["org.biocpkgconda.attempts"], "1")
         self.assertEqual(annotations["org.conda.name"], "bioconductor-deseq2")
         self.assertEqual(annotations["org.conda.version"], "1.52.0")
         self.assertEqual(annotations["org.conda.subdir"], "linux-64")
         self.assertEqual(annotations["org.biocpkgconda.run-url"], "https://github.com/example/channel/actions/runs/1")
+        self.assertEqual(annotations["org.biocpkgconda.stage"], "build")
         self.assertEqual(annotations["org.opencontainers.image.description"], REGISTRY_DESCRIPTION)
 
     def test_increments_attempts(self):
         tag = "failed_linux-64_bioconductor-deseq2-1.52.0"
         registry = FakeRegistry({tag: {"annotations": {"org.biocpkgconda.attempts": "1"}}})
         self.assertEqual(self.fail(registry)[0], 2)
+
+    def test_stages(self):
+        for stage in record.STAGES:
+            with self.subTest(stage):
+                [(_, files)] = self.fail(FakeRegistry(), stage)[1]
+                self.assertEqual(json.loads(files["failure.json"])["stage"], stage)
+                self.assertEqual(json.loads(files["annotations.json"])["$manifest"]["org.biocpkgconda.stage"], stage)
+
+    def test_invalid_stage(self):
+        for stage in ("", "publish", "Build", "build\n", "recipe build"):
+            oras = Oras()
+            with self.subTest(stage), self.assertRaisesRegex(Error, "invalid stage"):
+                record.fail(("linux-64", "DESeq2"), "https://github.com/example/channel/actions/runs/1", stage,
+                            FakeRegistry(), sources(), "x", run=oras)
+            self.assertEqual(oras.calls, [])
 
     def test_attempts(self):
         self.assertEqual(record.attempts(None), 0)
@@ -269,7 +285,23 @@ class FailTest(unittest.TestCase):
 
     def test_invalid_run_url(self):
         with self.assertRaisesRegex(Error, "invalid run URL"):
-            record.fail(("linux-64", "DESeq2"), "javascript:alert(1)", FakeRegistry(), sources(), "x", run=Oras())
+            record.fail(("linux-64", "DESeq2"), "javascript:alert(1)", "build", FakeRegistry(), sources(), "x",
+                        run=Oras())
+
+    def test_fail_command(self):
+        environ = {"GITHUB_REPOSITORY": "example/channel"}
+        argv = ["fail", "--config", str(ROOT), "--target", "osx-arm64/DESeq2", "--run-url", "https://x/1"]
+        with mock.patch.dict("os.environ", environ), \
+                mock.patch.object(__main__.metadata, "load", return_value=sources()), \
+                mock.patch.object(__main__.record, "fail") as fail:
+            self.assertEqual(__main__.main([*argv, "--stage", "check"]), 0)
+            with redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit):
+                __main__.main([*argv, "--stage", "publish"])
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                __main__.main(argv)
+        fail.assert_called_once()
+        self.assertEqual(fail.call_args.args[:3], (("osx-arm64", "DESeq2"), "https://x/1", "check"))
+        self.assertIn("invalid choice: 'publish'", stderr.getvalue())
 
 
 class SourceUrlTest(unittest.TestCase):

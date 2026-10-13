@@ -19,6 +19,9 @@ from .naming import failure_tag, package_tag, split_filename
 from .registry import FAILURE, INDEX, PACKAGE_V2, Registry
 
 ATTEMPTS = "org.biocpkgconda.attempts"
+STAGE = "org.biocpkgconda.stage"
+# Steps of package.yml whose failure counts as a failed build.
+STAGES = ("recipe", "build", "package", "verify", "check")
 LIBRARY = "lib/R/library"
 MAX_INDEX_SIZE = 64 * 1024
 MAX_PATHS_SIZE = 64 * 1024 * 1024
@@ -312,22 +315,25 @@ def attempts(manifest: dict | None) -> int:
     return int(value) if value.isdigit() else 0
 
 
-def fail(target: tuple[str, str], run_url: str, registry: Registry, sources: Sources, source: str,
+def fail(target: tuple[str, str], run_url: str, stage: str, registry: Registry, sources: Sources, source: str,
          run=subprocess.run) -> int:
-    """Record a failed build of the current version of a package. Returns the attempt count."""
+    """Record a build of the current version of a package that failed at ``stage``. Returns the attempt count."""
     subdir, name = target
     package = _package(sources, name)
     if not _RUN_URL.fullmatch(run_url):
         raise Error(f"invalid run URL {run_url!r}")
+    if stage not in STAGES:
+        raise Error(f"invalid stage {stage!r}; expected one of {', '.join(STAGES)}")
     tag = failure_tag(subdir, package.conda_name, package.conda_version)
     count = attempts(registry.manifest(tag)) + 1
     marker = {"name": package.conda_name, "version": package.conda_version, "subdir": subdir,
-              "attempts": count, "run_url": run_url}
+              "attempts": count, "run_url": run_url, "stage": stage}
     annotations = {"$manifest": {
         "org.opencontainers.image.source": source,
         "org.opencontainers.image.description": REGISTRY_DESCRIPTION,
         ATTEMPTS: str(count),
         "org.biocpkgconda.run-url": run_url,
+        STAGE: stage,
         "org.conda.subdir": subdir,
         "org.conda.name": package.conda_name,
         "org.conda.version": package.conda_version,
@@ -336,5 +342,5 @@ def fail(target: tuple[str, str], run_url: str, registry: Registry, sources: Sou
         workdir = Path(tmp)
         (workdir / "failure.json").write_text(json.dumps(marker, indent=2) + "\n")
         oras_push(f"{registry.reference}:{tag}", [("failure.json", FAILURE)], annotations, workdir, run)
-    print(f"recorded failed attempt {count} for {subdir}/{package.conda_name}-{package.conda_version}")
+    print(f"recorded failed attempt {count} at {stage} for {subdir}/{package.conda_name}-{package.conda_version}")
     return count

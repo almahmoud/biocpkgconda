@@ -56,11 +56,14 @@ class Channel:
             {"mediaType": REPODATA_ZST, "digest": "sha256:" + "0" * 64, "size": 1},
         ]}
 
-    def add_failure(self, subdir, name, version, attempts):
+    def add_failure(self, subdir, name, version, attempts, stage=None):
+        annotations = {"org.conda.subdir": subdir, "org.conda.name": name, "org.conda.version": version,
+                       "org.biocpkgconda.attempts": str(attempts), "org.biocpkgconda.run-url": "https://x/1"}
+        if stage is not None:
+            annotations["org.biocpkgconda.stage"] = stage
         self.registry.manifests[failure_tag(subdir, name, version)] = {
             "layers": [{"mediaType": FAILURE, "digest": "sha256:" + "1" * 64, "size": 1}],
-            "annotations": {"org.conda.subdir": subdir, "org.conda.name": name, "org.conda.version": version,
-                            "org.biocpkgconda.attempts": str(attempts), "org.biocpkgconda.run-url": "https://x/1"}}
+            "annotations": annotations}
 
 
 class ReconcileTest(unittest.TestCase):
@@ -188,7 +191,17 @@ class FailuresTest(unittest.TestCase):
         with redirect_stderr(io.StringIO()):
             markers = index.failures(channel.registry, channel.registry.list_tags())
         self.assertEqual(markers, [{"subdir": "linux-64", "name": "bioconductor-deseq2", "version": "1.52.0",
-                                    "attempts": 2, "run_url": "https://x/1"}])
+                                    "attempts": 2, "run_url": "https://x/1", "stage": ""}])
+
+    def test_stage(self):
+        channel = Channel()
+        channel.add_failure("linux-64", "r-a", "1.0", 1, "verify")
+        channel.add_failure("linux-64", "r-b", "1.0", 1, "Build")
+        channel.add_failure("linux-64", "r-c", "1.0", 1, "")
+        channel.add_failure("linux-64", "r-d", "1.0", 1)
+        markers = index.failures(channel.registry, channel.registry.list_tags())
+        self.assertEqual({marker["name"]: marker["stage"] for marker in markers},
+                         {"r-a": "verify", "r-b": "", "r-c": "", "r-d": ""})
 
 
 class IndexTest(unittest.TestCase):
@@ -207,6 +220,27 @@ class IndexTest(unittest.TestCase):
             "linux-64": [],
         })
         self.assertEqual(state["failures"][0]["attempts"], 1)
+
+
+class ChannelStateTest(unittest.TestCase):
+    def test_reads_published_repodata_without_pushing(self):
+        channel = Channel()
+        channel.add_package("noarch", record("r-foo", "1.0", "noarch"))
+        repodata, *_ = index.reconcile(channel.registry, "noarch", channel.registry.list_tags())
+        channel.add_repodata("noarch", repodata)
+        # Published after the last index run, so not in the repodata yet.
+        channel.add_package("noarch", record("r-bar", "1.0", "noarch"))
+        channel.add_failure("linux-64", "bioconductor-deseq2", "1.52.0", 2, "check")
+        with mock.patch.object(index, "push_repodata", side_effect=AssertionError("pushed")), \
+                mock.patch.object(index, "oras_push", side_effect=AssertionError("pushed")):
+            state = index.channel_state(channel.registry, ("noarch", "linux-64"))
+        self.assertEqual(state, {
+            "subdirs": {"noarch": [{"name": "r-foo", "version": "1.0", "depends": ["r-base >=4.6,<4.7.0a0"]}],
+                        "linux-64": []},
+            "failures": [{"subdir": "linux-64", "name": "bioconductor-deseq2", "version": "1.52.0", "attempts": 2,
+                          "run_url": "https://x/1", "stage": "check"}],
+        })
+        self.assertNotIn(package_tag("noarch", "r-bar-1.0-r46_0.conda"), channel.registry.requested)
 
 
 class CommandTest(unittest.TestCase):
