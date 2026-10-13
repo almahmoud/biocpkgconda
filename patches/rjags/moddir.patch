@@ -1,0 +1,11 @@
+--- a/R/unix/zzz.R.in
++++ b/R/unix/zzz.R.in
+@@ -5,7 +5,7 @@
+ 
+     ## Set the module directory
+     if (is.null(getOption("jags.moddir"))) {
+-        options("jags.moddir" = "@JAGS_MODDIR@")
++        options("jags.moddir" = file.path(R.home(), "..", "JAGS", "modules-4"))
+     }
+     load.module("basemod", quiet=TRUE)
+     load.module("bugs", quiet=TRUE)

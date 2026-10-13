@@ -1,0 +1,9 @@
+--- a/src/rcpp_test.cpp
++++ b/src/rcpp_test.cpp
+@@ -1,6 +1,5 @@
+ #include <stdlib.h>
+ #include "dada.h"
+-#include "emmintrin.h"
+ using namespace std;
+ // [[Rcpp::interfaces(cpp)]]
+ 

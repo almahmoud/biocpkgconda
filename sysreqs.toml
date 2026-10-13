@@ -82,6 +82,12 @@ run = ["jags 4.*"]
 pattern = '(?i)\bcairo\b|librsvg'
 host = ["cairo", "freetype", "xorg-kbproto", "xorg-renderproto", "xorg-xextproto", "xorg-xproto"]
 
+# Xlib.h from xorg-libx11 includes X11/X.h, which ships in the X11 protocol headers.
+[[rule]]
+pattern = '(?i)\bX11\b'
+host = ["xorg-xproto"]
+platforms = ["linux-64"]
+
 [[rule]]
 pattern = '(?i)freetype'
 host = ["freetype"]
@@ -119,6 +125,12 @@ run = ["openjdk"]
 [[rule]]
 pattern = '(?i)\bcmake\b'
 build = ["cmake"]
+
+# Rust packages (extendr, savvy) build a static library with cargo during R CMD INSTALL.
+[[rule]]
+pattern = '(?i)\bcargo\b|\brustc\b|\brust\b'
+build = ["rust"]
+platforms = ["linux-64", "osx-arm64"]
 
 [[rule]]
 pattern = '(?i)openmp'

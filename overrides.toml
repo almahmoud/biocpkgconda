@@ -1,6 +1,10 @@
 # Per-package recipe fixes, keyed by R package name.
-#   build, host, run  conda-forge match specs added to that recipe section
-#   skip              reason the package is not built
+#   build, host, run   conda-forge match specs added to that recipe section
+#   skip               reason the package is not built
+#   makevars           lines added to the user Makevars, as { <subdir> = [lines] }
+#   patches            files in patches/<Package>/ applied to the source
+#   binary_relocation  files rattler-build relinks, as { <subdir> = false | [globs] }
+#   env                variables exported by build.sh, as { NAME = "value" }
 #
 # [package.ExamplePkg]
 # host = ["gsl", "libxml2 >=2.12"]
@@ -25,13 +29,16 @@ build = ["autoconf", "automake"]
 host = ["libarchive"]
 
 [package.arrow]
-host = ["libarrow", "libarrow-acero", "libarrow-compute", "libarrow-dataset", "libarrow-substrait", "libparquet"]
+host = ["libarrow 25.*", "libarrow-acero 25.*", "libarrow-compute 25.*", "libarrow-dataset 25.*", "libarrow-substrait 25.*", "libparquet 25.*"]
 
 [package.audio]
 build = ["autoconf", "automake"]
 
 [package.aws]
 build = ["autoconf", "automake"]
+
+[package.BAGS]
+skip = "src/libmat.h includes R_ext/PrtUtil.h, which R 4.6 removed; it also fails on the Bioconductor 3.23 Linux builder"
 
 [package.bamsignals]
 host = ["liblzma-devel"]
@@ -75,8 +82,12 @@ build = ["automake"]
 
 [package.ChemmineOB]
 build = ["automake"]
-host = ["openbabel"]
-run = ["openbabel"]
+host = ["openbabel 3.2.*", "eigen"]
+run = ["openbabel >=3.2.1,<3.3"]
+patches = ["makevars.patch"]
+
+[package.ChIPComp]
+skip = "src/mva.c includes R_ext/PrtUtil.h, which R 4.6 no longer ships; also fails on Bioconductor 3.23 nebbiolo1 and all 3.24 builders"
 
 [package.clusterCrit]
 build = ["autoconf", "automake"]
@@ -86,6 +97,9 @@ build = ["automake"]
 
 [package.CoGAPS]
 build = ["automake"]
+
+[package.COMPASS]
+skip = "src/mat2vec.c and src/transpose_list.c call DATAPTR and STRING_PTR, which R 4.6 headers no longer declare; INSTALL also fails on the Bioconductor 3.23 builders"
 
 [package.coop]
 build = ["autoconf", "automake"]
@@ -110,6 +124,9 @@ build = ["automake"]
 
 [package.DataVisualizations]
 host = ["tbb-devel"]
+
+[package.decemedip]
+skip = "Stan models use the pre-2.33 array syntax that the current StanHeaders stanc rejects; fails on Bioconductor 3.23 builders too"
 
 [package.decontX]
 build = ["automake"]
@@ -146,7 +163,7 @@ build = ["autoconf", "automake"]
 build = ["autoconf", "automake"]
 
 [package.FLAMES]
-build = ["automake"]
+build = ["automake", "zlib"]
 host = ["liblzma-devel", "glpk", "libcurl", "libxml2-devel >=2.14.5", "imagemagick", "bzip2", "ncurses"]
 run = ["libuv", "git", "python >=3.11,<3.12", "pip"]
 
@@ -155,6 +172,9 @@ build = ["autoconf", "automake"]
 
 [package.flowClust]
 build = ["automake"]
+
+[package.flowCore]
+host = ["bioconductor-rhdf5lib"]
 
 [package.flowFP]
 build = ["automake"]
@@ -177,6 +197,12 @@ host = ["expat", "fontconfig", "glib"]
 [package.GENESIS]
 host = ["libopenblas"]
 
+[package.GeneticsPed]
+makevars = { osx-arm64 = ["CPPFLAGS += -D_LIBCPP_REMOVE_TRANSITIVE_INCLUDES"] }
+
+[package.geneXtendeR]
+skip = "NAMESPACE imports dplyr::id, which dplyr 1.2 no longer exports; lazy loading fails (also fails on the Bioconductor 3.23 build system)"
+
 [package.gert]
 build = ["autoconf", "automake"]
 host = ["libgit2"]
@@ -197,6 +223,9 @@ build = ["automake"]
 [package.gmp]
 build = ["autoconf", "automake"]
 
+[package.GOfuncR]
+skip = "uses ENVFLAGS/SET_ENVFLAGS, which R 4.6 no longer declares; fails to install on the Bioconductor 3.23 builders too"
+
 [package.gsl]
 build = ["autoconf", "automake"]
 
@@ -208,6 +237,13 @@ build = ["autoconf", "automake"]
 
 [package.HilbertVisGUI]
 build = ["automake"]
+skip = "needs gtkmm-2.4 (SystemRequirements), which conda-forge does not provide; conda-forge gtkmm is 3.x only"
+
+[package.HiSpaR]
+host = ["armadillo"]
+
+[package.HMP2Data]
+skip = "imports dplyr::id, removed in dplyr 1.2; fails to install upstream on Bioconductor 3.23"
 
 [package.httpuv]
 build = ["gnuconfig", "autoconf", "automake"]
@@ -221,6 +257,7 @@ build = ["automake"]
 
 [package.iClusterPlus]
 build = ["automake"]
+patches = ["gfortran-prefix.patch"]
 
 [package.IgGeneUsage]
 build = ["automake"]
@@ -237,6 +274,7 @@ build = ["autoconf", "automake"]
 
 [package.imager]
 build = ["autoconf", "automake"]
+host = ["xorg-libx11", "xorg-xproto"]
 
 [package.immunoClust]
 build = ["automake"]
@@ -244,6 +282,9 @@ build = ["automake"]
 [package.iscream]
 build = ["automake"]
 host = ["liblzma-devel"]
+
+[package.ISoLDE]
+makevars = { osx-arm64 = ["SHLIB_OPENMP_CFLAGS = -fopenmp -include omp.h"] }
 
 [package.isotree]
 build = ["autoconf", "automake"]
@@ -262,6 +303,7 @@ host = ["glpk", "liblzma-devel", "libxml2-devel"]
 
 [package.lpsymphony]
 build = ["automake"]
+patches = ["symphony-configure-tp.patch"]
 
 [package.lwgeom]
 build = ["autoconf", "automake"]
@@ -299,6 +341,9 @@ build = ["autoconf", "automake"]
 
 [package.MetaboDynamics]
 build = ["automake"]
+
+[package.metahdep]
+makevars = { linux-64 = ["CFLAGS += -Wno-error=int-conversion"], osx-arm64 = ["CFLAGS += -Wno-error=int-conversion"] }
 
 [package.methylKit]
 host = ["liblzma-devel"]
@@ -344,6 +389,9 @@ build = ["autoconf", "automake"]
 host = ["hdf5"]
 run = ["hdf5"]
 
+[package.nearBynding]
+skip = "imports filter from plyranges, which plyranges 1.32 no longer exports; fails INSTALL on the Bioconductor 3.23 builders and was removed from 3.23"
+
 [package.netboost]
 build = ["automake"]
 
@@ -374,7 +422,7 @@ host = ["zeromq"]
 
 [package.pdftools]
 build = ["autoconf", "automake"]
-host = ["poppler", "expat"]
+host = ["poppler", "expat", "freetype"]
 
 [package.PhyloProfileData]
 run = ["curl"]
@@ -387,6 +435,10 @@ build = ["autoconf", "automake"]
 
 [package.ppcseq]
 build = ["automake"]
+skip = "Stan model uses the array syntax removed in Stan 2.33; rstan 2.32.7 cannot compile it (fails on Bioconductor 3.23 builders too)"
+
+[package.pqsfinder]
+host = ["libboost-headers 1.90.*"]
 
 [package.preprocessCore]
 build = ["automake"]
@@ -435,8 +487,15 @@ build = ["autoconf", "automake"]
 [package.Rarr]
 build = ["automake"]
 
+[package.Rbec]
+patches = ["no-emmintrin.patch"]
+
+[package.Rbowtie2]
+binary_relocation = { osx-arm64 = ["lib/R/library/Rbowtie2/bowtie2-*"] }
+
 [package.RbowtieCuda]
 build = ["automake"]
+skip = "needs the CUDA toolkit and an NVIDIA GPU driver (nvidia-smi) at build time; not supported on macOS"
 
 [package.rcdd]
 build = ["autoconf", "automake"]
@@ -456,8 +515,8 @@ host = ["tbb-devel"]
 run = ["tbb-devel", "tbb"]
 
 [package.RcppPlanc]
-build = ["autoconf", "automake", "highfive"]
-host = ["libplanc"]
+build = ["autoconf", "automake"]
+host = ["libplanc", "highfive"]
 
 [package.RCurl]
 build = ["autoconf", "automake"]
@@ -495,6 +554,9 @@ build = ["automake"]
 [package.Rhdf5lib]
 build = ["automake"]
 
+[package.Rhisat2]
+binary_relocation = { osx-arm64 = false }
+
 [package.RhpcBLASctl]
 build = ["autoconf", "automake"]
 
@@ -509,6 +571,7 @@ build = ["automake"]
 
 [package.rjags]
 build = ["autoconf", "automake"]
+patches = ["moddir.patch"]
 
 [package.rJava]
 build = ["autoconf", "automake"]
@@ -519,8 +582,8 @@ build = ["autoconf", "automake"]
 
 [package.RMariaDB]
 build = ["autoconf", "automake"]
-host = ["mariadb-connector-c"]
-run = ["mariadb-connector-c"]
+host = ["mysql-devel"]
+run = ["mysql-libs"]
 
 [package.Rmixmod]
 build = ["autoconf", "automake"]
@@ -535,8 +598,11 @@ run = ["openmpi"]
 
 [package.RMySQL]
 build = ["autoconf", "automake"]
-host = ["mariadb-connector-c"]
-run = ["mariadb-connector-c"]
+host = ["mysql-devel"]
+run = ["mysql-libs"]
+
+[package.RNAdecay]
+host = ["r-rcppeigen"]
 
 [package.RNifti]
 build = ["autoconf", "automake"]
@@ -550,6 +616,7 @@ host = ["bzip2", "libcurl", "liblzma-devel"]
 [package.rsbml]
 build = ["automake"]
 host = ["libxml2-devel"]
+skip = "conda-forge libsbml is built with WITH_CPP_NAMESPACE=ON, so rsbml's C++ sources (layoutWrappers.cpp, rsbml.h) cannot find the unqualified libsbml C API types; bioconda skiplists it for the same reason"
 
 [package.rsparse]
 build = ["autoconf", "automake"]
@@ -576,6 +643,7 @@ host = ["libabseil"]
 
 [package.scMET]
 build = ["automake"]
+skip = "Stan models use the array syntax removed in Stan 2.33, which the stanc in StanHeaders 2.39.1 rejects at configure time; also fails on the Bioconductor 3.23 and 3.24 builders"
 
 [package.scPipe]
 host = ["liblzma-devel"]
@@ -586,11 +654,13 @@ build = ["autoconf", "automake"]
 [package.seqminer]
 build = ["autoconf", "automake"]
 host = ["zstd"]
+makevars = { linux-64 = ["CPPFLAGS += -D_GNU_SOURCE"] }
 
 [package.sf]
 build = ["autoconf", "automake"]
 host = ["geos", "libgdal-core", "proj"]
 run = ["libgdal-core", "proj"]
+env = { LIBS = "-Wl,-rpath,${{ PREFIX }}/lib" }
 
 [package.SharedObject]
 build = ["automake"]
@@ -605,6 +675,12 @@ build = ["autoconf", "automake"]
 [package.SICtools]
 host = ["ncurses"]
 run = ["ncurses"]
+
+[package."SNPlocs.Hsapiens.dbSNP155.GRCh37"]
+skip = "6 GiB data package; rattler-build is killed (SIGKILL) on the standard GitHub runner"
+
+[package."SNPlocs.Hsapiens.dbSNP155.GRCh38"]
+skip = "6.2 GB source tarball; too large to build and publish as a conda package"
 
 [package.SpliceWiz]
 build = ["automake"]
@@ -630,10 +706,11 @@ build = ["autoconf", "automake"]
 build = ["autoconf", "automake"]
 host = ["libgdal-core", "proj", "geos"]
 run = ["proj", "libgdal-core"]
+env = { LIBS = "-Wl,-rpath,${{ PREFIX }}/lib" }
 
 [package.textshaping]
 build = ["autoconf", "automake"]
-host = ["harfbuzz", "fribidi"]
+host = ["harfbuzz", "fribidi", "glib"]
 
 [package.tiff]
 build = ["autoconf", "automake"]
@@ -644,6 +721,7 @@ host = ["tiledb 2.30.*"]
 [package.tkrplot]
 build = ["autoconf", "automake"]
 host = ["tk"]
+makevars = { osx-arm64 = ["CFLAGS += -Wno-implicit-function-declaration"] }
 
 [package.torch]
 build = ["autoconf", "automake"]

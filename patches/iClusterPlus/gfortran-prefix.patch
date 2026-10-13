@@ -1,0 +1,11 @@
+--- a/configure
++++ b/configure
+@@ -2144,7 +2144,7 @@
+ fi
+ 
+ case "${FC}" in
+-    gfortran*)
++    *gfortran*)
+       echo "  R configured for gfortran; Good!"
+       OUR_FCFLAGS="-fdefault-real-8 -ffixed-form"
+ 
