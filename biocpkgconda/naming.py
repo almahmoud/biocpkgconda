@@ -13,6 +13,8 @@ BASE_R = frozenset({
     "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils",
 })
 
+R_PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9.]*")
+
 _DEPENDENCY = re.compile(r"([A-Za-z][A-Za-z0-9.]*)\s*(?:\(\s*(>=|<=|==|>|<)\s*(\d+(?:[.-]\d+)*)\s*\))?")
 _FILENAME = re.compile(r"[A-Za-z0-9._+!-]{1,255}")
 _EXTENSIONS = (".conda", ".tar.bz2")

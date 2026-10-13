@@ -3,11 +3,11 @@
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import Error
-from .naming import SUBDIRS
+from .naming import R_PACKAGE, SUBDIRS
 
 BIOC_REPOSITORIES = ("bioc", "data/annotation", "data/experiment", "workflows")
 # Each target runs a reusable workflow with up to three jobs; this keeps a build run to a few hundred jobs.
@@ -26,6 +26,12 @@ _CHANNEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/:-]*")
 # Anaconda's own repository, which needs a paid license at organizations over 200 people.
 _ANACONDA = re.compile(r"(?i)^(defaults|anaconda|main|r|msys2|pkgs/\w+)$|repo\.anaconda\.|conda\.anaconda\.org/(anaconda|main|r|msys2)(/|$)")
 _MATCH_SPEC = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._+-]*( [A-Za-z0-9.*_,<>=!|+-]+){0,2}")
+_MAKEVARS_LINE = re.compile(r"[A-Za-z_][A-Za-z0-9_]* *[+:?]?= *[^\x00-\x1f\x7f]*")
+_PATCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.patch")
+_GLOB = re.compile(r"[A-Za-z0-9._/*?{},-]+")
+_ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
+_ENV_VALUE = re.compile(r"([A-Za-z0-9 ,._/=+:@-]|\$\{\{ (PREFIX|BUILD_PREFIX) \}\})*")
+_RESERVED_ENV = frozenset({"PATH", "PREFIX", "BUILD_PREFIX", "SRC_DIR", "HOME"})
 
 
 @dataclass(frozen=True)
@@ -218,6 +224,10 @@ class Override:
     host: tuple[str, ...] = ()
     run: tuple[str, ...] = ()
     skip: str | None = None
+    makevars: dict[str, tuple[str, ...]] = field(default_factory=dict)  # by subdir
+    patches: tuple[Path, ...] = ()
+    binary_relocation: dict[str, bool | tuple[str, ...]] = field(default_factory=dict)  # by subdir: False or globs
+    env: dict[str, str] = field(default_factory=dict)
 
 
 def _specs(table: dict, key: str, where: str) -> tuple[str, ...]:
@@ -255,20 +265,92 @@ def load_sysreqs(path: Path) -> tuple[Rule, ...]:
     return tuple(rules)
 
 
+def _by_subdir(table: dict, key: str, where: str) -> dict:
+    value = table.get(key, {})
+    if not isinstance(value, dict):
+        raise Error(f"{where}.{key} must be a table keyed by subdir")
+    for subdir in value:
+        if subdir == "noarch" or subdir not in SUBDIRS:
+            raise Error(f"{where}.{key}: {subdir!r} is not a platform subdir such as linux-64")
+    return value
+
+
+def _makevars(table: dict, where: str) -> dict[str, tuple[str, ...]]:
+    makevars = {}
+    for subdir, lines in _by_subdir(table, "makevars", where).items():
+        if not (isinstance(lines, list) and lines
+                and all(isinstance(line, str) and _MAKEVARS_LINE.fullmatch(line) for line in lines)):
+            raise Error(f"{where}.makevars.{subdir} must be a non-empty list of make assignments "
+                        "such as \"CFLAGS += -O2\"")
+        makevars[subdir] = tuple(lines)
+    return makevars
+
+
+def _patches(table: dict, where: str, directory: Path) -> tuple[Path, ...]:
+    names = table.get("patches", [])
+    if (not isinstance(names, list) or not all(isinstance(n, str) and _PATCH.fullmatch(n) for n in names)
+            or len(set(names)) != len(names)):
+        raise Error(f"{where}.patches must be a list of distinct file names ending in .patch")
+    paths = tuple(directory / name for name in names)
+    for path in paths:
+        if any(p.is_symlink() for p in (directory.parent, directory, path)) or not path.is_file():
+            raise Error(f"{where}.patches: {path} is not a file")
+    return paths
+
+
+def _binary_relocation(table: dict, where: str) -> dict[str, bool | tuple[str, ...]]:
+    relocation = {}
+    for subdir, value in _by_subdir(table, "binary_relocation", where).items():
+        # true is rattler-build's default, and an empty list relocates nothing, which false says directly.
+        if value is False:
+            relocation[subdir] = False
+        elif isinstance(value, list) and value and all(isinstance(g, str) and _GLOB.fullmatch(g) for g in value):
+            relocation[subdir] = tuple(value)
+        else:
+            raise Error(f"{where}.binary_relocation.{subdir} must be false or a non-empty list of globs "
+                        "relative to the prefix")
+    return relocation
+
+
+def _env(table: dict, where: str) -> dict[str, str]:
+    env = table.get("env", {})
+    if not isinstance(env, dict):
+        raise Error(f"{where}.env must be a table")
+    for name, value in env.items():
+        if not _ENV_NAME.fullmatch(name) or name in _RESERVED_ENV:
+            raise Error(f"{where}.env: {name!r} is not an allowed variable name")
+        if not isinstance(value, str) or not _ENV_VALUE.fullmatch(value):
+            raise Error(f"{where}.env.{name} may hold only letters, digits, spaces, the characters ,._/=+:@- "
+                        "and ${{ PREFIX }} or ${{ BUILD_PREFIX }}")
+    return dict(env)
+
+
 def load_overrides(path: Path) -> dict[str, Override]:
     data = _read(path)
     _check_keys(data, {"package"}, Path(path).name)
+    patches = Path(path).parent / "patches"
     overrides = {}
     for name, table in data.get("package", {}).items():
         where = f"package.{name}"
+        if not R_PACKAGE.fullmatch(name):
+            raise Error(f"{where}: invalid R package name")
         if not isinstance(table, dict):
             raise Error(f"{where} must be a table")
-        _check_keys(table, {"build", "host", "run", "skip"}, where)
+        _check_keys(table, {"build", "host", "run", "skip", "makevars", "patches", "binary_relocation", "env"},
+                    where)
         skip = _value(table, "skip", str, where, required=False)
         if skip is not None and not skip.strip():
             raise Error(f"{where}.skip must give a reason")
-        overrides[name] = Override(_specs(table, "build", where), _specs(table, "host", where),
-                                   _specs(table, "run", where), skip)
+        overrides[name] = Override(
+            build=_specs(table, "build", where),
+            host=_specs(table, "host", where),
+            run=_specs(table, "run", where),
+            skip=skip,
+            makevars=_makevars(table, where),
+            patches=_patches(table, where, patches / name),
+            binary_relocation=_binary_relocation(table, where),
+            env=_env(table, where),
+        )
     return overrides
 
 

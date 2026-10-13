@@ -63,7 +63,7 @@ Versions are the R package versions with `-` replaced by `_`: `XML 3.99-0.24` is
 - The Bioconductor 3.23 or CRAN source release, checked against the MD5 sum in the repository index and installed with `R CMD INSTALL --build`.
 - Run dependencies from `Depends` and `Imports`; `LinkingTo` packages are used at build time only. `Suggests` and `Enhances` are not dependencies; install those packages yourself when a vignette or optional feature needs them.
 - A load test: every package runs `library(<Package>)` in a fresh environment before it is published.
-- Files in `lib/R/library/<Package>/` only. A package that installs anything else, including link or activation scripts, is not published.
+- Files in `lib/R/library/<Package>/` only. Files the build writes elsewhere in the prefix, including link or activation scripts, are left out of the package.
 - Compilers and system libraries from conda-forge, at the versions pinned by conda-forge.
 
 Some packages are not built: those that depend on packages in none of Bioconductor, CRAN and conda-forge, those that need a newer R, and those whose build failed twice. The sync summary lists them with the reason.
@@ -93,6 +93,21 @@ run = ["pandoc >=3.1"]        # added to requirements.run
 [package."BSgenome.Example.UCSC.xx1"]
 skip = "source tarball exceeds the runner disk"
 ```
+
+Four more keys change how one package is built:
+
+```toml
+[package.ExamplePkg]
+makevars = { osx-arm64 = ["CPPFLAGS += -DEXAMPLE"] }
+patches = ["configure.patch"]
+binary_relocation = { osx-arm64 = ["lib/R/library/ExamplePkg/bin/*"] }
+env = { LIBS = "-Wl,-rpath,${{ PREFIX }}/lib" }
+```
+
+- `makevars`: make assignments (`=`, `+=`, `:=` or `?=`) added to the user Makevars of `R CMD INSTALL`, per subdir.
+- `patches`: files in `patches/<Package>/`, applied in order to the unpacked source. Write them with `diff -u` against the current source tarball, with paths relative to the package directory (`a/configure`, `b/configure`). A patch applies on every subdir, and a build fails when a new release no longer matches it.
+- `binary_relocation`: per subdir, `false` or globs relative to the prefix. rattler-build rewrites the rpaths and install names of only the matching files, or of none for `false`.
+- `env`: environment variables exported by `build.sh` before `R CMD INSTALL`. Values may hold letters, digits, spaces, `,._/=+:@-`, and `${{ PREFIX }}` or `${{ BUILD_PREFIX }}` for the host and build prefixes. `PATH`, `PREFIX`, `BUILD_PREFIX`, `SRC_DIR` and `HOME` cannot be set.
 
 `sysreqs.toml` maps the `SystemRequirements` field of any package to conda-forge packages:
 
@@ -144,6 +159,7 @@ The build runs the package's own `configure` and `Makevars`, so the container se
 |---|---|
 | `channel.toml` | Bioconductor and R versions, platforms and their runners, build limits, pinned tools |
 | `overrides.toml` | Per-package recipe fixes |
+| `patches/` | Source patches named in `overrides.toml`, one directory per package |
 | `sysreqs.toml` | `SystemRequirements` rules |
 | `biocpkgconda/` | Metadata, recipe rendering, planning, indexing and publishing (`python -m biocpkgconda --help`) |
 | `docker/` | Builder image `ghcr.io/almahmoud/biocpkgconda-builder:<Bioconductor version>`, based on `ghcr.io/bioconductor/r-ver` |

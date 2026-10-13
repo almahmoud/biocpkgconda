@@ -116,7 +116,7 @@ def cmd_dispatch(args) -> None:
 def parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", type=Path, default=Path("."), metavar="DIR",
-                        help="directory with channel.toml, overrides.toml and sysreqs.toml (default: .)")
+                        help="directory with channel.toml, overrides.toml, sysreqs.toml and patches/ (default: .)")
     common.add_argument("--cache", type=Path, metavar="DIR", help="reuse metadata downloads from this directory")
 
     root = argparse.ArgumentParser(prog="python -m biocpkgconda",

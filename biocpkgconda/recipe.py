@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import shutil
 import tarfile
 import zlib
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from . import Error, dcf, licenses
 from .config import Channel, Override, Rule
 from .metadata import Package, Sources
-from .naming import bioc_name, cran_name, exceeds_r, match_spec, r_base_pin, version_key
+from .naming import R_PACKAGE, bioc_name, cran_name, exceeds_r, match_spec, r_base_pin, version_key
 from .net import open_stream
 
 LANGUAGES = {
@@ -20,10 +21,67 @@ LANGUAGES = {
     ".F": "fortran", ".F90": "fortran", ".f03": "fortran",
 }
 
-BUILD_SH = """\
+# Parts of build.sh. The shell code runs under bash 3.2 on macOS and uses sed options that BSD and GNU sed share.
+# sed runs in the C locale: rattler-build sets LC_ALL=C.UTF-8, where BSD sed stops at bytes that are not UTF-8.
+_SCRIPT_START = """\
 #!/usr/bin/env bash
 set -euo pipefail
-R CMD INSTALL --build .
+"""
+# -I/usr/include and -L/usr/lib put the build machine's headers and libraries ahead of the conda ones.
+_SYSTEM_PATHS = r"""for f in src/Makevars src/Makevars.in; do
+  if [ -f "$f" ]; then
+    LC_ALL=C sed -i.orig -E -e ':a' -e 's#(^|[[:space:]=])-(I|L)[[:space:]]*/usr/(include|lib)/?([[:space:]]|$)#\1\4#' -e 'ta' "$f"
+@APPLE_STRIP@  fi
+done
+"""
+# Apple's strip has no --strip-debug; -S removes the debugging symbols.
+_APPLE_STRIP = """\
+    LC_ALL=C sed -i.orig 's|strip --strip-debug|strip -S|g' "$f"
+"""
+# configure looks for ac_unique_file in . and then .., so a unique file named after the package is found only when
+# the source directory has the package's name, which it does not under rattler-build.
+_UNIQUE_FILE = """\
+if [ -f configure ] && grep -Fqx 'ac_unique_file="@PACKAGE@"' configure; then
+  LC_ALL=C sed -i.orig 's/^ac_unique_file="@PACKAGE_PATTERN@"$/ac_unique_file="DESCRIPTION"/' configure
+fi
+"""
+# binutils activation exports GPROF, which some configure scripts take as a request to compile with -pg.
+_LINUX_TOOLCHAIN = "unset GPROF\n"
+# Keeps configure from running bundled config.sub scripts that predate arm64 macOS.
+_OSX_ARM64_TOOLCHAIN = "export ac_cv_build=aarch64-apple-darwin20.0.0 ac_cv_host=aarch64-apple-darwin20.0.0\n"
+_JAVA = """\
+export JAVA_HOME="$PREFIX/lib/jvm"
+export PATH="$JAVA_HOME/bin:$PATH"
+@LIBRARY_PATH@R CMD javareconf
+"""
+_JAVA_LIBRARY_PATH = 'export LD_LIBRARY_PATH="$JAVA_HOME/lib/server${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
+# conda-forge r-base can leave CCnn empty in Makeconf (conda-forge/r-base-feedstock#349).
+_C_STANDARDS = r"""makevars="$(mktemp)"
+for std in 17 23 90 99; do
+  if [ -z "$(R CMD config "CC$std" 2>/dev/null | grep -v '^WARNING' || true)" ]; then
+    printf 'CC%s = %s -std=gnu%s\nC%sFLAGS = %s\n' "$std" "$(R CMD config CC)" "$std" "$std" \
+      "$(R CMD config CFLAGS)" >> "$makevars"
+  fi
+done
+"""
+# libc++ drops std::random_shuffle in C++17 and marks std::to_chars unavailable before macOS 13.3, and clang rejects
+# `register` in C++17. R passes CXXFLAGS=$(CXXnnFLAGS) on the make command line for packages that set CXX_STD, so
+# the flags go in CPPFLAGS and every CXXnnFLAGS.
+_OSX_MAKEVARS = (
+    "CPPFLAGS += -D_LIBCPP_ENABLE_CXX17_REMOVED_RANDOM_SHUFFLE -D_LIBCPP_DISABLE_AVAILABILITY",
+    *(f"{name} += -Wno-register" for name in ("CXXFLAGS", "CXX11FLAGS", "CXX14FLAGS", "CXX17FLAGS", "CXX20FLAGS",
+                                              "CXX23FLAGS", "CXX26FLAGS")),
+)
+# rattler-build 0.76.1 relinks wrongly when two LC_RPATH entries differ only by a trailing slash.
+_DUPLICATE_RPATHS = r"""for lib in "$PREFIX/lib/R/library/@PACKAGE@/libs/"*.so; do
+  [ -e "$lib" ] || continue
+  rpaths=$("${OTOOL:-otool}" -l "$lib" | awk '$1 == "cmd" { rp = ($2 == "LC_RPATH") } rp && $1 == "path" { print $2 }')
+  while IFS= read -r p; do
+    [[ "$p" == */ ]] || continue
+    "${INSTALL_NAME_TOOL:-install_name_tool}" -delete_rpath "$p" "$lib"
+    grep -qxF -- "${p%/}" <<<"$rpaths" || "${INSTALL_NAME_TOOL:-install_name_tool}" -add_rpath "${p%/}" "$lib"
+  done <<<"$rpaths"
+done
 """
 
 
@@ -133,6 +191,10 @@ def check_buildable(package: Package, subdir: str, channel: Channel, override: O
         raise Error(f"{package.name} does not need compilation; build it for noarch")
 
 
+def uses_java(host: list[str]) -> bool:
+    return any(spec.partition(" ")[0] == "openjdk" for spec in host)
+
+
 def render(package: Package, info: SourceInfo, subdir: str, channel: Channel, sources: Sources,
            rules: tuple[Rule, ...], override: Override | None) -> dict:
     compiled = package.needs_compilation or info.has_src
@@ -166,12 +228,24 @@ def render(package: Package, info: SourceInfo, subdir: str, channel: Channel, so
     license_files = [f"${{{{ PREFIX }}}}/lib/R/share/licenses/{name}" for name in license.r_files]
     license_files += [name for name in license.source_files if name in info.files]
 
+    source = {"url": package.url, "md5": package.md5}
+    if override and override.patches:
+        source["patches"] = [path.name for path in override.patches]
+
     build_section: dict = {"number": 0}
     if not compiled:
         build_section["noarch"] = "generic"
     build_section["script"] = "build.sh"
+    # The load test of R CMD INSTALL can write elsewhere in the prefix, such as a fontconfig cache.
+    build_section["files"] = [f"lib/R/library/{package.name}/**"]
     if compiled:
-        build_section["dynamic_linking"] = {"rpaths": ["lib/R/lib/", "lib/"]}
+        rpaths = ["lib/R/lib/", "lib/"]
+        if uses_java(host):
+            rpaths.append("lib/jvm/lib/server/")
+        build_section["dynamic_linking"] = {"rpaths": rpaths}
+        relocation = override.binary_relocation.get(subdir) if override else None
+        if relocation is not None:
+            build_section["dynamic_linking"]["binary_relocation"] = False if relocation is False else list(relocation)
 
     requirements = {"build": merge(build)} if build else {}
     requirements |= {"host": merge(host), "run": merge(run)}
@@ -184,7 +258,7 @@ def render(package: Package, info: SourceInfo, subdir: str, channel: Channel, so
 
     return {
         "package": {"name": package.conda_name, "version": package.conda_version},
-        "source": {"url": package.url, "md5": package.md5},
+        "source": source,
         "build": build_section,
         "requirements": requirements,
         "tests": [{"r": {"libraries": [package.name]}}],
@@ -224,12 +298,47 @@ def dump_yaml(data: dict, indent: int = 0) -> str:
     return "\n".join(lines)
 
 
-def write(recipe: dict, out: Path) -> None:
+def build_script(name: str, subdir: str, compiled: bool, java: bool, override: Override | None) -> str:
+    """build.sh for a package on a subdir."""
+    if not R_PACKAGE.fullmatch(name):
+        raise Error(f"invalid R package name {name!r}")
+    osx, linux = subdir.startswith("osx-"), subdir.startswith("linux-")
+    script = _SCRIPT_START
+    if compiled:
+        script += _SYSTEM_PATHS.replace("@APPLE_STRIP@", _APPLE_STRIP if osx else "")
+    script += _UNIQUE_FILE.replace("@PACKAGE@", name).replace("@PACKAGE_PATTERN@", name.replace(".", r"\."))
+    if compiled and linux:
+        script += _LINUX_TOOLCHAIN
+    if compiled and subdir == "osx-arm64":
+        script += _OSX_ARM64_TOOLCHAIN
+    if java:
+        script += _JAVA.replace("@LIBRARY_PATH@", _JAVA_LIBRARY_PATH if linux else "")
+    if override:
+        # load_overrides admits only values that need no quoting inside double quotes.
+        for key, value in override.env.items():
+            value = value.replace("${{ PREFIX }}", "${PREFIX}").replace("${{ BUILD_PREFIX }}", "${BUILD_PREFIX}")
+            script += f'export {key}="{value}"\n'
+    if compiled:
+        lines = [*(_OSX_MAKEVARS if osx else ()), *(override.makevars.get(subdir, ()) if override else ())]
+        script += _C_STANDARDS
+        if lines:
+            script += "cat >> \"$makevars\" <<'EOF'\n" + "".join(f"{line}\n" for line in lines) + "EOF\n"
+        script += 'export R_MAKEVARS_USER="$makevars"\n'
+    script += "R CMD INSTALL --build .\n"
+    if compiled and osx:
+        script += _DUPLICATE_RPATHS.replace("@PACKAGE@", name)
+    return script
+
+
+def write(recipe: dict, out: Path, script: str, patches: tuple[Path, ...] = ()) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "recipe.yaml").write_text(dump_yaml(recipe) + "\n")
-    script = out / "build.sh"
-    script.write_text(BUILD_SH)
-    script.chmod(0o755)
+    path = out / "build.sh"
+    path.write_text(script)
+    path.chmod(0o755)
+    # rattler-build resolves source.patches against the directory of recipe.yaml.
+    for patch in patches:
+        shutil.copyfile(patch, out / patch.name)
 
 
 def generate(target: tuple[str, str], channel: Channel, sources: Sources, rules: tuple[Rule, ...],
@@ -242,5 +351,7 @@ def generate(target: tuple[str, str], channel: Channel, sources: Sources, rules:
     override = overrides.get(name)
     check_buildable(package, subdir, channel, override)
     recipe = render(package, fetch_source(package), subdir, channel, sources, rules, override)
-    write(recipe, out)
+    script = build_script(package.name, subdir, "noarch" not in recipe["build"],
+                          uses_java(recipe["requirements"]["host"]), override)
+    write(recipe, out, script, override.patches if override else ())
     return recipe
