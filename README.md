@@ -74,6 +74,12 @@ The [Sync channel](https://github.com/almahmoud/biocpkgconda/actions/workflows/s
 
 In a [Build packages](https://github.com/almahmoud/biocpkgconda/actions/workflows/build.yml) run, the build job of each package shows the rattler-build log and keeps the rendered recipe as a run artifact for 14 days.
 
+A [Channel status](https://github.com/almahmoud/biocpkgconda/actions/workflows/status.yml) run, started by hand, keeps `status.json` as its `status` artifact for 7 days. For every package in the channel it lists the version, its dependencies in the channel, and per platform whether the package installs with all its dependencies, its build status, and the package that holds it back. It also lists the failed builds of current versions with their run and the step that failed: `recipe`, `build`, `package`, `verify` or `check`. To write the same file from the registry:
+
+```sh
+GITHUB_REPOSITORY=almahmoud/biocpkgconda python -m biocpkgconda status --out status.json
+```
+
 ## Reporting a broken package
 
 Open an [issue](https://github.com/almahmoud/biocpkgconda/issues) with the conda package name, the platform, and the error message or the failing build job.
@@ -162,8 +168,9 @@ The build runs the package's own `configure` and `Makevars`, so the container se
 | `patches/` | Source patches named in `overrides.toml`, one directory per package |
 | `sysreqs.toml` | `SystemRequirements` rules |
 | `biocpkgconda/` | Metadata, recipe rendering, planning, indexing and publishing (`python -m biocpkgconda --help`) |
+| `dashboard/` | Static status page that reads `status.json` from its own directory |
 | `docker/` | Builder image `ghcr.io/almahmoud/biocpkgconda-builder:<Bioconductor version>`, based on `ghcr.io/bioconductor/r-ver` |
-| `.github/workflows/` | `sync.yml` plans and dispatches builds; `build.yml` runs `package.yml` for each target, which builds, tests and publishes it; `builder-image.yml` publishes the builder image; `tests.yml` runs the unit tests |
+| `.github/workflows/` | `sync.yml` plans and dispatches builds; `build.yml` runs `package.yml` for each target, which builds, tests and publishes it; `status.yml` writes `status.json`; `builder-image.yml` publishes the builder image; `tests.yml` runs the unit tests |
 
 ## License
 

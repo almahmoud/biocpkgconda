@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Build and install status of every Bioconductor package in the biocpkgconda conda channel.">
+<title>biocpkgconda status</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b6b74'/%3E%3Cpath d='M9 10h14M9 16h9M9 22h5' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#search">Skip to search</a>
+
+<header class="masthead">
+  <div class="wrap masthead-grid">
+    <div class="masthead-title">
+      <p class="brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M9 10h14M9 16h9M9 22h5"/></svg>biocpkgconda</p>
+      <h1 id="title">Bioconductor packages on conda</h1>
+      <p class="lede" id="lede">Build and install status for each package in the channel.</p>
+    </div>
+    <div class="masthead-meta">
+      <p class="updated" id="updated" hidden>Updated <time id="updated-relative"></time><span class="updated-abs" id="updated-absolute"></span></p>
+    </div>
+    <div class="install-line" id="install-line">
+      <div class="install-head">
+        <p class="install-label">Install from the channel, listed before conda-forge</p>
+        <div class="seg seg-small" role="radiogroup" aria-label="Package manager">
+          <label><input type="radio" name="tool" value="conda" checked><span>conda</span></label>
+          <label><input type="radio" name="tool" value="pixi"><span>pixi</span></label>
+        </div>
+      </div>
+      <div class="code-line">
+        <code id="install-command"></code>
+        <button type="button" class="copy" data-copy="install-command">Copy</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="main">
+  <div class="notice" id="notice" role="alert" hidden></div>
+
+  <section class="summary" id="summary" aria-labelledby="summary-title" hidden>
+    <h2 class="sr-only" id="summary-title">Bioconductor packages by platform</h2>
+    <div class="summary-grid" id="summary-grid"></div>
+  </section>
+
+  <div class="workspace" id="workspace" hidden>
+    <section class="browser" aria-labelledby="browser-title">
+      <h2 class="sr-only" id="browser-title">Packages</h2>
+      <form class="filters" id="filters" role="search">
+        <div class="search">
+          <label class="sr-only" for="search">Search packages</label>
+          <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+          <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search packages">
+          <kbd class="search-key" aria-hidden="true">/</kbd>
+        </div>
+
+        <div class="filter-row">
+          <fieldset class="seg" id="platform-filter">
+            <legend class="sr-only">Platform</legend>
+          </fieldset>
+          <label class="sort">
+            <span>Sort</span>
+            <select id="sort">
+              <option value="name">By name</option>
+              <option value="blocks">By packages blocked</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset class="chips">
+          <legend>Status</legend>
+          <div class="chip-set" id="status-filter"></div>
+        </fieldset>
+
+        <fieldset class="chips">
+          <legend>Repository</legend>
+          <div class="chip-set" id="repo-filter">
+            <label class="switch">
+              <input type="checkbox" id="cran">
+              <span class="switch-track" aria-hidden="true"></span>
+              <span>Include CRAN dependencies</span>
+            </label>
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="results-bar">
+        <p id="count" class="count" aria-live="polite" aria-atomic="true"></p>
+        <button type="button" class="link-button" id="clear" hidden>Clear filters</button>
+      </div>
+      <p class="hint" id="cran-hint" hidden></p>
+
+      <div class="list-panel" id="list-panel">
+        <div class="list-head" id="list-head" aria-hidden="true"></div>
+        <div class="rows" id="rows" role="listbox" tabindex="0" aria-label="Packages"></div>
+        <div class="empty" id="empty" hidden>
+          <p class="empty-title" id="empty-title"></p>
+          <p id="empty-text"></p>
+        </div>
+      </div>
+    </section>
+
+    <aside class="detail" id="detail" aria-labelledby="detail-title" tabindex="-1">
+      <div class="detail-inner" id="detail-inner"></div>
+    </aside>
+  </div>
+</main>
+
+<footer class="wrap footer">
+  <p>Statuses come from the channel's last planning run. A package installs on a platform once it and every package it depends on in the channel are built for that platform.</p>
+</footer>
+
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<p class="sr-only" id="announcer" aria-live="polite"></p>
+</body>
+</html>
