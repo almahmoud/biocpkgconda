@@ -166,6 +166,17 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(statuses["noarch/Top"], "ready")
         self.assertEqual(statuses["osx-arm64/Native"], "waiting")
 
+    def test_unbuilt_noarch_is_blocked_where_a_dependency_fails(self):
+        state = {"subdirs": {"noarch": [built("r-tool", "0.5_1"), built("bioconductor-core", "1.0.0")],
+                             "linux-64": [built("r-helper", "1.0"), built("bioconductor-native", "2.0.0")]},
+                 "failures": [{"subdir": "osx-arm64", "name": "r-helper", "version": "1.0", "attempts": 2,
+                               "run_url": "x"}]}
+        planner = self.planner(state)
+        self.assertEqual(planner.status("Top", "osx-arm64").status, "ready")
+        self.assertEqual(planner.usable("Top", "linux-64"), plan.Status("waiting"))
+        self.assertEqual(planner.usable("Top", "osx-arm64"),
+                         plan.Status("blocked", "build failed 2 times on osx-arm64", "Helper"))
+
     def test_failures(self):
         state = {"subdirs": {}, "failures": [
             {"subdir": "linux-64", "name": "r-helper", "version": "1.0", "attempts": 2, "run_url": "x"},

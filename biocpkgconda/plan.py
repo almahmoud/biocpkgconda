@@ -87,14 +87,17 @@ class Planner:
         return self._memoized(self._memo, key, lambda: self._evaluate(package, key[1]))
 
     def usable(self, name: str, platform: str) -> Status:
-        """``built`` once the package and all its dependencies in this channel install on ``platform``."""
+        """``built`` once the package and all its dependencies in this channel install on ``platform``.
+
+        Blocked as soon as one of those dependencies cannot install there, even before the package is built.
+        """
         return self._memoized(self._usable, (name, platform), lambda: self._check_usable(self.units[name], platform))
 
     def _check_usable(self, package: Package, platform: str) -> Status:
         own = self.status(package.name, platform)
-        if own.status != "built":
-            return own if own.status in _STOPPED else Status("waiting")
-        return self._dependencies(package, platform) or Status("built")
+        if own.status in _STOPPED:
+            return own
+        return self._dependencies(package, platform) or Status("built" if own.status == "built" else "waiting")
 
     def _dependencies(self, package: Package, platform: str) -> Status | None:
         """Blocked or waiting when a dependency in this channel is not usable on ``platform``."""
